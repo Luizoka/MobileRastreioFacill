@@ -1,6 +1,5 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
-import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const LOCATION_TASK_NAME = 'background-location-task';
@@ -22,19 +21,23 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       console.log('UserId:', userId);
 
       if (token && userId) {
-       const { latitude, longitude } = locations[0].coords;
+        const { latitude, longitude } = locations[0].coords;
         const locationData = {
           userId: parseInt(userId, 10),
           latitude,
           longitude
         };
         console.log('Sending location data:', locationData);
-        const response = await axios.put('http://192.168.31.10:3000/api/users/location', locationData, {
+        const response = await fetch('http://192.168.31.10:3000/api/users/location', {
+          method: 'PUT',
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(locationData)
         });
-        console.log('Location update response:', response.data);
+        const responseData = await response.json();
+        console.log('Location update response:', responseData);
       } else {
         console.warn('Token or userId not found');
       }

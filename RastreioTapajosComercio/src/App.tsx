@@ -2,19 +2,21 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
-// import * as Font from 'expo-font'; // Comentado temporariamente
 import LoginScreen from './screens/LoginScreen';
+import RegisterScreen from './screens/RegisterScreen';
 import MapScreen from './screens/MapScreen';
 import { stopBackgroundUpdate } from '../locationTask'; // Importar a função de parar o rastreamento
+import { getToken } from '../src/utils/auth';
 
 const App = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false); // Mudar para entrar automaticamente
-  const [fontsLoaded, setFontsLoaded] = useState(false); // Alterado para true temporariamente
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [fontsLoaded, setFontsLoaded] = useState(false);
 
   useEffect(() => {
     const checkLoginStatus = async () => {
-      const userId = await AsyncStorage.getItem('userId');
-      if (userId) {
+      const token = await getToken();
+      if (token) {
         setIsLoggedIn(true);
       }
     };
@@ -56,8 +58,10 @@ const App = () => {
     <View style={styles.container} onLayout={onLayoutRootView}>
       {isLoggedIn ? (
         <MapScreen onLogout={handleLogout} />
+      ) : isRegistering ? (
+        <RegisterScreen onRegister={() => setIsRegistering(false)} onNavigateToLogin={() => setIsRegistering(false)} />
       ) : (
-        <LoginScreen onLogin={() => setIsLoggedIn(true)} />
+        <LoginScreen onLogin={() => setIsLoggedIn(true)} onNavigateToRegister={() => setIsRegistering(true)} />
       )}
     </View>
   );

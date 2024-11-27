@@ -1,50 +1,49 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Image } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { startBackgroundUpdate } from '../../locationTask'; // Importar a função de rastreamento
 
-const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, onNavigateToRegister: () => void }) => {
+const RegisterScreen = ({ onRegister, onNavigateToLogin }: { onRegister: () => void, onNavigateToLogin: () => void }) => {
+  const [nome, setNome] = useState('');
   const [email, setEmail] = useState('');
   const [senha, setSenha] = useState('');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
-  const handleLogin = async () => {
-    console.log('Attempting to log in with:', { email, senha });
+  const handleRegister = async () => {
+    console.log('Attempting to register with:', { nome, email, senha });
     try {
-      const response = await fetch('http://192.168.31.10:3000/api/funcionario/login', {
+      const response = await fetch('http://localhost:3000/api/funcionario/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, senha }),
+        body: JSON.stringify({ nome, email, senha }),
       });
 
-      console.log('API response status:', response.status); // Log do status da resposta da API
-
-      if (response.status === 200) {
+      if (response.status === 201) {
         const data = await response.json();
-        console.log('Login response:', data);
-        const { token } = data;
-        await AsyncStorage.setItem('token', token);
-        await startBackgroundUpdate(); // Iniciar o rastreamento de localização em segundo plano
-        onLogin();
-      } else if (response.status === 401) {
-        const data = await response.json();
-        console.error('Login error:', data.error);
-        setError('Login failed. Please check your credentials.');
+        console.log('Register response:', data);
+        setMessage('Funcionário registrado com sucesso');
+        onRegister();
       } else {
-        console.error('Login error:', response.statusText);
-        setError('Login failed. Please try again.');
+        const data = await response.json();
+        console.error('Register error:', data.error);
+        setError('Registration failed. Please try again.');
       }
     } catch (err) {
-      console.error('Login error:', err);
-      setError('Login failed. Please check your credentials.');
+      console.error('Register error:', err);
+      setError('Registration failed. Please check your credentials.');
     }
   };
 
   return (
     <View style={styles.container}>
       <Image source={require('../../assets/LOGO_1.png')} style={styles.logo} />
+      <TextInput
+        style={styles.input}
+        placeholder="Nome"
+        value={nome}
+        onChangeText={setNome}
+      />
       <TextInput
         style={styles.input}
         placeholder="Email"
@@ -59,9 +58,10 @@ const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, o
         secureTextEntry
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <Button title="Entrar" onPress={handleLogin} />
+      {message ? <Text style={styles.message}>{message}</Text> : null}
+      <Button title="Registrar" onPress={handleRegister} />
       <View style={styles.buttonSpacing} />
-      <Button title="Cadastro" onPress={onNavigateToRegister} />
+      <Button title="Voltar" onPress={onNavigateToLogin} />
     </View>
   );
 };
@@ -91,9 +91,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     // fontFamily: 'Poppins-Regular', // Comentado temporariamente
   },
+  message: {
+    color: 'green',
+    marginBottom: 12,
+    // fontFamily: 'Poppins-Regular', // Comentado temporariamente
+  },
   buttonSpacing: {
     height: 10, // Adjust the height as needed for spacing
   },
 });
 
-export default LoginScreen;
+export default RegisterScreen;
