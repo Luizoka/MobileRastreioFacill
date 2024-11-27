@@ -1,23 +1,28 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
 import LoginScreen from './screens/LoginScreen';
 import RegisterScreen from './screens/RegisterScreen';
+import HallScreen from './screens/HallScreen';
 import MapScreen from './screens/MapScreen';
 import { stopBackgroundUpdate } from '../locationTask'; // Importar a função de parar o rastreamento
-import { getToken } from '../src/utils/auth';
+import { getToken, isTokenValid, removeToken } from '../src/utils/auth';
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isInHall, setIsInHall] = useState(false);
   const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [selectedEmpresaId, setSelectedEmpresaId] = useState<number | null>(null);
 
   useEffect(() => {
     const checkLoginStatus = async () => {
       const token = await getToken();
-      if (token) {
+      if (token && isTokenValid(token)) {
         setIsLoggedIn(true);
+      } else {
+        await removeToken();
+        setIsLoggedIn(false);
       }
     };
 
@@ -44,10 +49,19 @@ const App = () => {
   }, [fontsLoaded]);
 
   const handleLogout = async () => {
-    await AsyncStorage.removeItem('username');
-    await AsyncStorage.removeItem('password');
+    await removeToken();
     await stopBackgroundUpdate(); // Parar o rastreamento de localização em segundo plano
     setIsLoggedIn(false);
+    setIsInHall(false);
+  };
+
+  const handleBackToHall = () => {
+    setIsInHall(true);
+  };
+
+  const handleNavigateToMap = (id_empresa: number) => {
+    setSelectedEmpresaId(id_empresa);
+    setIsInHall(false);
   };
 
   if (!fontsLoaded) {
@@ -57,11 +71,15 @@ const App = () => {
   return (
     <View style={styles.container} onLayout={onLayoutRootView}>
       {isLoggedIn ? (
-        <MapScreen onLogout={handleLogout} />
+        isInHall ? (
+          <HallScreen onNavigateToMap={handleNavigateToMap} onLogout={handleLogout} onNavigateToLogin={() => setIsLoggedIn(false)} />
+        ) : (
+          <MapScreen onLogout={handleBackToHall} id_empresa={selectedEmpresaId} />
+        )
       ) : isRegistering ? (
         <RegisterScreen onRegister={() => setIsRegistering(false)} onNavigateToLogin={() => setIsRegistering(false)} />
       ) : (
-        <LoginScreen onLogin={() => setIsLoggedIn(true)} onNavigateToRegister={() => setIsRegistering(true)} />
+        <LoginScreen onLogin={() => { setIsLoggedIn(true); setIsInHall(true); }} onNavigateToRegister={() => setIsRegistering(true)} />
       )}
     </View>
   );

@@ -8,12 +8,12 @@ import {
   watchPositionAsync,
   LocationAccuracy
 } from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { styles } from '../styles/styles';
 import { startBackgroundUpdate, stopBackgroundUpdate } from '../../locationTask'; // Importar funções de rastreamento
 import { getToken } from '../utils/auth';
 
-const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
+const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa: number | null }) => {
+  console.log(id_empresa);
   const [location, setLocation] = useState<LocationObject | null>(null);
   const [isTracking, setIsTracking] = useState<boolean>(false); // Desligado por padrão
 
@@ -36,13 +36,13 @@ const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
     }
 
     try {
-      const response = await fetch('http://192.168.31.10:3000/api/funcionario/adicionar-historico-localizacao', {
+      const response = await fetch('http://192.168.31.10:3000/api/funcionario/enviar-localizacao-atual', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ latitude, longitude }),
+        body: JSON.stringify({ latitude, longitude, id_empresa }),
       });
 
       if (response.status === 500) {
@@ -56,8 +56,8 @@ const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
         }
       } else if (response.status === 404) {
         const data = await response.json();
-        if (data.error === 'Nenhum vínculo ativo encontrado.') {
-          console.error('Error: Nenhum vínculo ativo encontrado.');
+        if (data.error === 'Nenhum vínculo ativo encontrado para a empresa especificada.') {
+          console.error('Error: Nenhum vínculo ativo encontrado para a empresa especificada.');
         } else {
           console.error('Error: Erro desconhecido ao enviar localização.');
         }
@@ -84,7 +84,7 @@ const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ latitude, longitude }),
+        body: JSON.stringify({ latitude, longitude, id_empresa }),
       });
 
       if (response.status === 500) {
@@ -98,8 +98,8 @@ const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
         }
       } else if (response.status === 404) {
         const data = await response.json();
-        if (data.error === 'Nenhum vínculo ativo encontrado.') {
-          console.error('Error: Nenhum vínculo ativo encontrado.');
+        if (data.error === 'Nenhum vínculo ativo encontrado para a empresa especificada.') {
+          console.error('Error: Nenhum vínculo ativo encontrado para a empresa especificada.');
         } else {
           console.error('Error: Erro desconhecido ao adicionar ao histórico.');
         }
@@ -122,7 +122,7 @@ const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
       (async () => {
         subscription = await watchPositionAsync({
           accuracy: LocationAccuracy.Highest,
-          timeInterval: 1000,
+          timeInterval: 10000,
           distanceInterval: 1
         }, (response) => {
           setLocation(response);
@@ -147,10 +147,8 @@ const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
     };
   }, [isTracking]);
 
-  const handleLogout = async () => {
-    setIsTracking(false); // Parar o rastreamento ao fazer logout
-    await AsyncStorage.removeItem('username');
-    await AsyncStorage.removeItem('password');
+  const handleBack = async () => {
+    setIsTracking(false); // Parar o rastreamento ao voltar para o Hall
     onLogout();
   };
 
@@ -163,8 +161,8 @@ const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
             style={localStyles.buttonImage}
           />
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleLogout}>
-          <Text style={localStyles.logoutButton}>Logout</Text>
+        <TouchableOpacity onPress={handleBack}>
+          <Text style={localStyles.logoutButton}>Voltar</Text>
         </TouchableOpacity>
       </View>
       {
