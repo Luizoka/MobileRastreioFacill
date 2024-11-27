@@ -3,9 +3,9 @@ import { View, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SplashScreen from 'expo-splash-screen';
 // import * as Font from 'expo-font'; // Comentado temporariamente
-import LoginScreen from './LoginScreen';
-import MapScreen from './MapScreen';
-import { stopBackgroundUpdate } from './locationTask'; // Importar a função de parar o rastreamento
+import LoginScreen from './screens/LoginScreen';
+import MapScreen from './screens/MapScreen';
+import { stopBackgroundUpdate } from '../locationTask'; // Importar a função de parar o rastreamento
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false); // Mudar para entrar automaticamente

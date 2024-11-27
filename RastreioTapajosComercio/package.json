@@ -1,7 +1,7 @@
 {
   "name": "rastreiotapajoscomercio",
   "version": "1.0.0",
-  "main": "expo/AppEntry.js",
+  "main": "node_modules/expo/AppEntry.js",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -9,23 +9,23 @@
     "web": "expo start --web"
   },
   "dependencies": {
-    "@react-native-async-storage/async-storage": "^2.0.0",
+    "@react-native-async-storage/async-storage": "1.23.1",
     "axios": "^1.7.7",
-    "expo": "^51.0.32",
+    "expo": "~52.0.11",
     "expo-app-loading": "^2.1.1",
-    "expo-device": "^6.0.2",
-    "expo-font": "~12.0.10",
-    "expo-location": "~17.0.1",
-    "expo-splash-screen": "~0.27.6",
-    "expo-status-bar": "~1.12.1",
-    "expo-task-manager": "~11.8.2",
-    "react": "18.2.0",
-    "react-native": "0.74.5",
-    "react-native-maps": "1.14.0"
+    "expo-device": "~7.0.1",
+    "expo-font": "~13.0.1",
+    "expo-location": "~18.0.2",
+    "expo-splash-screen": "~0.29.13",
+    "expo-status-bar": "~2.0.0",
+    "expo-task-manager": "~12.0.3",
+    "react": "18.3.1",
+    "react-native": "0.76.3",
+    "react-native-maps": "1.18.0"
   },
   "devDependencies": {
     "@babel/core": "^7.20.0",
-    "@types/react": "~18.2.45",
+    "@types/react": "~18.3.12",
     "@types/react-native": "^0.73.0",
     "typescript": "^5.3.3"
   },

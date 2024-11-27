@@ -9,8 +9,8 @@ import {
   LocationAccuracy
 } from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { styles } from './styles';
-import { startBackgroundUpdate, stopBackgroundUpdate } from './locationTask'; // Importar funções de rastreamento
+import { styles } from '../styles/styles';
+import { startBackgroundUpdate, stopBackgroundUpdate } from '../../locationTask'; // Importar funções de rastreamento
 
 const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
   const [location, setLocation] = useState<LocationObject | null>(null);
@@ -70,7 +70,7 @@ const MapScreen = ({ onLogout }: { onLogout: () => void }) => {
       <View style={localStyles.buttonContainer}>
         <TouchableOpacity onPress={() => setIsTracking(!isTracking)}>
           <Image
-            source={isTracking ? require('./assets/botao_desligado.png') : require('./assets/botao_ligado.png')}
+            source={isTracking ? require('../../assets/botao_desligado.png') : require('../../assets/botao_ligado.png')}
             style={localStyles.buttonImage}
           />
         </TouchableOpacity>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios, { AxiosError } from 'axios';
-import { startBackgroundUpdate } from './locationTask'; // Importar a função de rastreamento
+import { startBackgroundUpdate } from '../../locationTask'; // Importar a função de rastreamento
 
 const LoginScreen = ({ onLogin }: { onLogin: () => void }) => {
   const [name, setName] = useState('');
@@ -45,7 +45,7 @@ const LoginScreen = ({ onLogin }: { onLogin: () => void }) => {
 
   return (
     <View style={styles.container}>
-      <Image source={require('./assets/LOGO_1.png')} style={styles.logo} />
+      <Image source={require('../../assets/LOGO_1.png')} style={styles.logo} />
       <TextInput
         style={styles.input}
         placeholder="Nome"
