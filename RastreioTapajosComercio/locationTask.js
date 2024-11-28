@@ -1,6 +1,7 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { API_BASE_URL } from '@env';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
@@ -28,7 +29,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
           longitude
         };
         console.log('Sending location data:', locationData);
-        const response = await fetch('http://192.168.31.10:3000/api/users/location', {
+        const response = await fetch(`${API_BASE_URL}/api/users/location`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',

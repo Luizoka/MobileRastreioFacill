@@ -11,6 +11,7 @@ import {
 import { styles } from '../styles/styles';
 import { startBackgroundUpdate, stopBackgroundUpdate } from '../../locationTask'; // Importar funções de rastreamento
 import { getToken } from '../utils/auth';
+import { API_BASE_URL } from '@env';
 
 const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa: number | null }) => {
   console.log(id_empresa);
@@ -36,7 +37,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
     }
 
     try {
-      const response = await fetch('http://192.168.31.10:3000/api/funcionario/enviar-localizacao-atual', {
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/enviar-localizacao-atual`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -78,7 +79,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
     }
 
     try {
-      const response = await fetch('http://192.168.31.10:3000/api/funcionario/adicionar-historico-localizacao', {
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/adicionar-historico-localizacao`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -109,6 +110,64 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
       }
     } catch (error) {
       console.error('Error adding location to history:', error);
+    }
+  }
+
+  async function activateApp() {
+    const token = await getToken();
+    if (!token) {
+      console.error('Token not found');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/ativar-app`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id_empresa }),
+      });
+
+      if (response.status === 200) {
+        const data = await response.json();
+        console.log('App activation response:', data);
+      } else if (response.status === 500) {
+        const data = await response.json();
+        console.error('Error:', data.error);
+      }
+    } catch (error) {
+      console.error('Error activating app:', error);
+    }
+  }
+
+  async function deactivateApp() {
+    const token = await getToken();
+    if (!token) {
+      console.error('Token not found');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/desativar-app`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ id_empresa }),
+      });
+
+      if (response.status === 200) {
+        const data = await response.json();
+        console.log('App deactivation response:', data);
+      } else if (response.status === 500) {
+        const data = await response.json();
+        console.error('Error:', data.error);
+      }
+    } catch (error) {
+      console.error('Error deactivating app:', error);
     }
   }
 
@@ -147,6 +206,15 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
     };
   }, [isTracking]);
 
+  const handleToggleTracking = async () => {
+    if (isTracking) {
+      await deactivateApp();
+    } else {
+      await activateApp();
+    }
+    setIsTracking(!isTracking);
+  };
+
   const handleBack = async () => {
     setIsTracking(false); // Parar o rastreamento ao voltar para o Hall
     onLogout();
@@ -155,7 +223,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
   return (
     <View style={styles.container}>
       <View style={localStyles.buttonContainer}>
-        <TouchableOpacity onPress={() => setIsTracking(!isTracking)}>
+        <TouchableOpacity onPress={handleToggleTracking}>
           <Image
             source={isTracking ? require('../../assets/botao_desligado.png') : require('../../assets/botao_ligado.png')}
             style={localStyles.buttonImage}

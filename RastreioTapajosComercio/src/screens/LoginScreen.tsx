@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { startBackgroundUpdate } from '../../locationTask'; // Importar a função de rastreamento
+import { API_BASE_URL } from '@env';
 
 const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, onNavigateToRegister: () => void }) => {
   const [email, setEmail] = useState('');
@@ -11,7 +12,7 @@ const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, o
   const handleLogin = async () => {
     console.log('Attempting to log in with:', { email, senha });
     try {
-      const response = await fetch('http://192.168.31.10:3000/api/funcionario/login', {
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

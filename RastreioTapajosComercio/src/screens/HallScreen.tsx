@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, Button, StyleSheet, FlatList, TouchableOpacity } from 'react-native';
 import { removeToken, getToken } from '../utils/auth';
+import { API_BASE_URL } from '@env';
 
 interface Empresa {
   id: number;
@@ -32,7 +33,7 @@ const HallScreen = ({ onNavigateToMap, onLogout, onNavigateToLogin }: { onNaviga
       }
 
       try {
-        const response = await fetch('http://192.168.31.10:3000/api/funcionario/empresas-vinculadas', {
+        const response = await fetch(`${API_BASE_URL}/api/funcionario/empresas-vinculadas`, {
           method: 'GET',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -42,7 +43,7 @@ const HallScreen = ({ onNavigateToMap, onLogout, onNavigateToLogin }: { onNaviga
         if (response.status === 200) {
           const data = await response.json();
           const empresasComNome = await Promise.all(data.map(async (empresa: Empresa) => {
-            const empresaResponse = await fetch(`http://192.168.31.10:3000/api/empresas/${empresa.id}`, {
+            const empresaResponse = await fetch(`${API_BASE_URL}/api/empresas/${empresa.id}`, {
               method: 'GET',
               headers: {
                 'Authorization': `Bearer ${token}`
