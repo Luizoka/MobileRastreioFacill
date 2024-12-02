@@ -40,6 +40,8 @@ const HallScreen = ({ onNavigateToMap, onLogout, onNavigateToLogin }: { onNaviga
           },
         });
 
+        console.log(response)
+
         if (response.status === 200) {
           const data = await response.json();
           const empresasComNome = await Promise.all(data.map(async (empresa: Empresa) => {
