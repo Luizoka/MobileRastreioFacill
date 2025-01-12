@@ -1,6 +1,5 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
 import {
   requestForegroundPermissionsAsync,
   getCurrentPositionAsync,
@@ -9,23 +8,28 @@ import {
   LocationAccuracy
 } from 'expo-location';
 import { styles } from '../styles/styles';
-import { startBackgroundUpdate, stopBackgroundUpdate } from '../../locationTask'; // Importar funções de rastreamento
 import { getToken } from '../utils/auth';
 import { API_BASE_URL } from '@env';
 
 const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa: number | null }) => {
-  console.log(id_empresa);
+  console.log('MapScreen rendered with id_empresa:', id_empresa);
   const [location, setLocation] = useState<LocationObject | null>(null);
   const [isTracking, setIsTracking] = useState<boolean>(false); // Desligado por padrão
 
-  const mapRef = useRef<MapView>(null);
-
   async function requestLocationPermissions() {
-    const { granted } = await requestForegroundPermissionsAsync();
-
-    if (granted) {
-      const currentPosition = await getCurrentPositionAsync();
-      setLocation(currentPosition);
+    console.log('Requesting location permissions');
+    try {
+      const { granted } = await requestForegroundPermissionsAsync();
+      if (granted) {
+        console.log('Location permissions granted');
+        const currentPosition = await getCurrentPositionAsync();
+        console.log('Current position:', currentPosition);
+        setLocation(currentPosition);
+      } else {
+        console.error('Location permissions not granted');
+      }
+    } catch (error) {
+      console.error('Error requesting location permissions:', error);
     }
   }
 
@@ -37,6 +41,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
     }
 
     try {
+      console.log('Sending current location:', { latitude, longitude });
       const response = await fetch(`${API_BASE_URL}/api/funcionario/enviar-localizacao-atual`, {
         method: 'POST',
         headers: {
@@ -79,6 +84,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
     }
 
     try {
+      console.log('Adding location to history:', { latitude, longitude });
       const response = await fetch(`${API_BASE_URL}/api/funcionario/adicionar-historico-localizacao`, {
         method: 'POST',
         headers: {
@@ -121,6 +127,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
     }
 
     try {
+      console.log('Activating app');
       const response = await fetch(`${API_BASE_URL}/api/funcionario/ativar-app`, {
         method: 'POST',
         headers: {
@@ -150,6 +157,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
     }
 
     try {
+      console.log('Deactivating app');
       const response = await fetch(`${API_BASE_URL}/api/funcionario/desativar-app`, {
         method: 'POST',
         headers: {
@@ -172,6 +180,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
   }
 
   useEffect(() => {
+    console.log('Requesting location permissions');
     requestLocationPermissions();
   }, []);
 
@@ -179,25 +188,24 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
     let subscription: any = null;
     if (isTracking) {
       (async () => {
-        subscription = await watchPositionAsync({
-          accuracy: LocationAccuracy.Highest,
-          timeInterval: 10000,
-          distanceInterval: 1
-        }, (response) => {
-          setLocation(response);
-          console.log('Received new locations in foreground:', response);
-          mapRef.current?.animateCamera({
-            center: response.coords
-          });
+        console.log('Starting watchPositionAsync');
+        try {
+          subscription = await watchPositionAsync({
+            accuracy: LocationAccuracy.Highest,
+            timeInterval: 10000,
+            distanceInterval: 1
+          }, (response) => {
+            console.log('Received new locations in foreground:', response);
+            setLocation(response);
 
-          // Enviar localização atual e adicionar ao histórico
-          sendCurrentLocation(response.coords.latitude.toString(), response.coords.longitude.toString());
-          addLocationToHistory(response.coords.latitude.toString(), response.coords.longitude.toString());
-        });
-        await startBackgroundUpdate(); // Iniciar rastreamento em segundo plano
+            // Enviar localização atual e adicionar ao histórico
+            sendCurrentLocation(response.coords.latitude.toString(), response.coords.longitude.toString());
+            addLocationToHistory(response.coords.latitude.toString(), response.coords.longitude.toString());
+          });
+        } catch (error) {
+          console.error('Error starting watchPositionAsync:', error);
+        }
       })();
-    } else {
-      stopBackgroundUpdate(); // Parar rastreamento em segundo plano
     }
     return () => {
       if (subscription) {
@@ -207,80 +215,84 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
   }, [isTracking]);
 
   const handleToggleTracking = async () => {
-    if (isTracking) {
-      await deactivateApp();
-    } else {
-      await activateApp();
+    console.log('Toggling tracking');
+    try {
+      if (isTracking) {
+        console.log('Deactivating app');
+        await deactivateApp();
+      } else {
+        console.log('Activating app');
+        await activateApp();
+      }
+      setIsTracking(!isTracking);
+    } catch (error) {
+      console.error('Error toggling tracking:', error);
     }
-    setIsTracking(!isTracking);
   };
 
   const handleBack = async () => {
+    console.log('Handling back');
     setIsTracking(false); // Parar o rastreamento ao voltar para o Hall
     onLogout();
   };
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={localStyles.backButton} onPress={handleBack}>
+        <Text style={localStyles.logoutButton}>Voltar</Text>
+      </TouchableOpacity>
       <View style={localStyles.buttonContainer}>
         <TouchableOpacity onPress={handleToggleTracking}>
           <Image
-            source={isTracking ? require('../../assets/botao_desligado.png') : require('../../assets/botao_ligado.png')}
+            source={isTracking ? require('../../assets/botao_ligado.png') : require('../../assets/botao_desligado.png')}
             style={localStyles.buttonImage}
           />
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleBack}>
-          <Text style={localStyles.logoutButton}>Voltar</Text>
-        </TouchableOpacity>
-      </View>
-      {
-        isTracking ? (
-          location && (
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-              initialRegion={{
-                latitude: location.coords.latitude,
-                longitude: location.coords.longitude,
-                latitudeDelta: 0.005,
-                longitudeDelta: 0.005
-              }}
-            >
-              <Marker
-                coordinate={{
-                  latitude: location.coords.latitude,
-                  longitude: location.coords.longitude,
-                }}
-              />
-            </MapView>
-          )
+        {isTracking ? (
+          <Text style={localStyles.trackingOnText}>Rastreamento ligado</Text>
         ) : (
-          <Text>Você está desconectado</Text>
-        )
-      }
+          <Text style={localStyles.trackingOffText}>Rastreamento desligado</Text>
+        )}
+      </View>
     </View>
   );
 };
 
 const localStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
   buttonContainer: {
-    position: 'absolute',
-    top: 50,
-    left: 10,
-    right: 10,
-    zIndex: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   buttonImage: {
-    width: 50, // Ajuste conforme necessário
-    height: 50, // Ajuste conforme necessário
+    width: 100,
+    height: 100,
+  },
+  backButton: {
+    position: 'absolute',
+    top: 50,
+    right: 16,
   },
   logoutButton: {
-    color: 'red',
+    fontSize: 20,
+    color: 'blue',
+  },
+  trackingOnText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    // fontFamily: 'Poppins-Regular', // Comentado temporariamente
+    color: 'green',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  trackingOffText: {
+    fontSize: 16,
+    color: 'red',
+    textAlign: 'center',
+    marginTop: 20,
   },
 });
 
