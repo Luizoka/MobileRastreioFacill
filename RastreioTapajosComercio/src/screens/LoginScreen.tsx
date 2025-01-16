@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, Image } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { startBackgroundUpdate } from '../../locationTask'; // Importar a função de rastreamento
+import { startBackgroundUpdate } from '../tasks/LocationTask'; // Corrigir o caminho da importação
 import { API_BASE_URL } from '@env';
 
 const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, onNavigateToRegister: () => void }) => {
@@ -19,9 +19,9 @@ const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, o
         },
         body: JSON.stringify({ email, senha }),
       });
-
-      console.log('API response status:', response.status); // Log do status da resposta da API
-
+  
+      console.log('API response status:', response.status);
+  
       if (response.status === 200) {
         const data = await response.json();
         console.log('Login response:', data);

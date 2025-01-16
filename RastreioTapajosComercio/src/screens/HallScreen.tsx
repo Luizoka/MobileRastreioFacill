@@ -61,7 +61,7 @@ const HallScreen = ({
       setError("Token not found");
       return;
     }
-
+  
     try {
       const response = await fetch(
         `${API_BASE_URL}/api/funcionario/empresas-vinculadas`,
@@ -72,12 +72,11 @@ const HallScreen = ({
           },
         }
       );
-
+  
       if (response.status === 200) {
         const data = await response.json();
         console.log("Empresas:", data);
-
-        // Verificar se os dados mudaram
+  
         if (JSON.stringify(data) !== JSON.stringify(prevEmpresasRef.current)) {
           setEmpresas(data);
           prevEmpresasRef.current = data;

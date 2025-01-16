@@ -1,37 +1,22 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import {
-  requestForegroundPermissionsAsync,
   getCurrentPositionAsync,
   LocationObject,
   watchPositionAsync,
-  LocationAccuracy
+  LocationAccuracy,
+  startLocationUpdatesAsync,
+  stopLocationUpdatesAsync
 } from 'expo-location';
 import { styles } from '../styles/styles';
 import { getToken } from '../utils/auth';
 import { API_BASE_URL } from '@env';
+import { LOCATION_TASK_NAME } from '../tasks/LocationTask';
 
 const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa: number | null }) => {
   console.log('MapScreen rendered with id_empresa:', id_empresa);
   const [location, setLocation] = useState<LocationObject | null>(null);
   const [isTracking, setIsTracking] = useState<boolean>(false); // Desligado por padrão
-
-  async function requestLocationPermissions() {
-    console.log('Requesting location permissions');
-    try {
-      const { granted } = await requestForegroundPermissionsAsync();
-      if (granted) {
-        console.log('Location permissions granted');
-        const currentPosition = await getCurrentPositionAsync();
-        console.log('Current position:', currentPosition);
-        setLocation(currentPosition);
-      } else {
-        console.error('Location permissions not granted');
-      }
-    } catch (error) {
-      console.error('Error requesting location permissions:', error);
-    }
-  }
 
   async function sendCurrentLocation(latitude: string, longitude: string) {
     const token = await getToken();
@@ -50,7 +35,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
         },
         body: JSON.stringify({ latitude, longitude, id_empresa }),
       });
-
+  
       if (response.status === 500) {
         const data = await response.json();
         if (data.error === 'Erro ao buscar vínculo do funcionário.') {
@@ -180,7 +165,17 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
   }
 
   useEffect(() => {
-    console.log('Requesting location permissions');
+    const requestLocationPermissions = async () => {
+      console.log('Requesting location permissions');
+      try {
+        const currentPosition = await getCurrentPositionAsync();
+        console.log('Current position:', currentPosition);
+        setLocation(currentPosition);
+      } catch (error) {
+        console.error('Error requesting location permissions:', error);
+      }
+    };
+
     requestLocationPermissions();
   }, []);
 
@@ -220,9 +215,14 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
       if (isTracking) {
         console.log('Deactivating app');
         await deactivateApp();
+        await stopLocationUpdatesAsync(LOCATION_TASK_NAME); // Parar a tarefa de localização em segundo plano
       } else {
         console.log('Activating app');
         await activateApp();
+        await startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+          accuracy: LocationAccuracy.High,
+          distanceInterval: 100, // Enviar localização a cada 100 metros
+        }); // Iniciar a tarefa de localização em segundo plano
       }
       setIsTracking(!isTracking);
     } catch (error) {
