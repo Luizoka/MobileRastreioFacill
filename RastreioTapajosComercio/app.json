@@ -9,6 +9,7 @@
     "splash": {
       "image": "./assets/icons/aaa.jpg",
       "resizeMode": "contain",
+      "versionCode":8,
       "backgroundColor": "#ffffff"
     },
     "ios": {
@@ -22,8 +23,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/aaa.jpg",
-        "backgroundColor": "#ffffff",
-        "versionCode": 7
+        "backgroundColor": "#ffffff"
       },
       "permissions": [
         "ACCESS_FINE_LOCATION",
@@ -31,7 +31,8 @@
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
         "INTERNET",
-        "ACCESS_NETWORK_STATE"
+        "ACCESS_NETWORK_STATE",
+        "RECEIVE_BOOT_COMPLETED"
       ],
       "package": "com.luizoka.RastreioTapajosComercio"
     },
@@ -42,7 +43,9 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow RastreioTapajosComercio to use your location."
+          "locationAlwaysAndWhenInUsePermission": "Allow RastreioTapajosComercio to use your location.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
         }
       ],
       "expo-font"

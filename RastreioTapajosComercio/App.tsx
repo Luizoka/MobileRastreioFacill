@@ -1,19 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Modal, Text, Button } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import HallScreen from './src/screens/HallScreen';
 import MapScreen from './src/screens/MapScreen';
-import { stopBackgroundUpdate } from './locationTask'; // Importar a função de parar o rastreamento
+import { stopBackgroundUpdate } from './src/tasks/LocationTask'; // Atualizar o caminho da importação
 import { getToken, isTokenValid, removeToken } from './src/utils/auth';
+import { requestForegroundPermissionsAsync, requestBackgroundPermissionsAsync } from 'expo-location';
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   const [isInHall, setIsInHall] = useState(false);
-  const [fontsLoaded, setFontsLoaded] = useState(false);
+  const [fontsLoaded, setFontsLoaded] = useState(true); // Temporariamente definido como true para depuração
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<number | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(true);
 
   useEffect(() => {
     const checkLoginStatus = async () => {
@@ -26,20 +28,29 @@ const App = () => {
       }
     };
 
-    const loadResources = async () => {
+    const requestLocationPermissions = async () => {
+      console.log('Requesting location permissions');
       try {
-        // await Font.loadAsync({
-        //   'Poppins-Regular': require('./fonts/Poppins-Regular.ttf'), // Substitua pelo caminho correto da sua fonte
-        // });
-      } catch (e) {
-        console.warn(e);
-      } finally {
-        setFontsLoaded(true);
+        const { status: foregroundStatus } = await requestForegroundPermissionsAsync();
+        if (foregroundStatus !== 'granted') {
+          alert('Permission to access location was denied');
+          return;
+        }
+
+        const { status: backgroundStatus } = await requestBackgroundPermissionsAsync();
+        if (backgroundStatus !== 'granted') {
+          alert('Permission to access background location was denied');
+          return;
+        }
+
+        setIsModalVisible(false);
+      } catch (error) {
+        console.error('Error requesting location permissions:', error);
       }
     };
 
-    loadResources();
     checkLoginStatus();
+    requestLocationPermissions();
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
@@ -65,11 +76,41 @@ const App = () => {
   };
 
   if (!fontsLoaded) {
+    console.log('Fonts not loaded');
     return null;
   }
 
+  console.log('Rendering App component');
+
   return (
     <View style={styles.container} onLayout={onLayoutRootView}>
+      <Modal
+        animationType="slide"
+        transparent={true}
+        visible={isModalVisible}
+        onRequestClose={() => {
+          setIsModalVisible(!isModalVisible);
+        }}
+      >
+        <View style={styles.modalView}>
+          <Text style={styles.modalText}>We need your permission to access your location all the time, even in the background.</Text>
+          <Button title="Grant Permission" onPress={async () => {
+            const { status: foregroundStatus } = await requestForegroundPermissionsAsync();
+            if (foregroundStatus !== 'granted') {
+              alert('Permission to access location was denied');
+              return;
+            }
+
+            const { status: backgroundStatus } = await requestBackgroundPermissionsAsync();
+            if (backgroundStatus !== 'granted') {
+              alert('Permission to access background location was denied');
+              return;
+            }
+
+            setIsModalVisible(false);
+          }} />
+        </View>
+      </Modal>
       {isLoggedIn ? (
         isInHall ? (
           <HallScreen onNavigateToMap={handleNavigateToMap} onLogout={handleLogout} onNavigateToLogin={() => setIsLoggedIn(false)} />
@@ -88,6 +129,25 @@ const App = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  modalView: {
+    margin: 20,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 35,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  modalText: {
+    marginBottom: 15,
+    textAlign: 'center',
   },
 });
 
