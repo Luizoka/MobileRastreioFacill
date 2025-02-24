@@ -218,20 +218,22 @@ const HallScreen = ({
   );
 
   const renderSolicitacao = ({ item }: { item: Solicitacao }) => (
-    <View style={styles.empresaContainer}>
-      <Text style={styles.empresaNome}>{item.nome}</Text>
-      <TouchableOpacity
-        style={styles.aceitarButton}
-        onPress={() => handleResponse(item.id, "aceita")}
-      >
-        <Text style={styles.aceitarButtonText}>Aceitar</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.negarButton}
-        onPress={() => handleResponse(item.id, "recusada")}
-      >
-        <Text style={styles.negarButtonText}>Negar</Text>
-      </TouchableOpacity>
+    <View style={styles.solicitacaoContainer}>
+      <Text style={styles.solicitacaoNome}>{item.nome}</Text>
+      <View style={styles.solicitacaoButtons}>
+        <TouchableOpacity
+          style={styles.aceitarButton}
+          onPress={() => handleResponse(item.id, "aceita")}
+        >
+          <Text style={styles.aceitarButtonText}>Aceitar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.negarButton}
+          onPress={() => handleResponse(item.id, "recusada")}
+        >
+          <Text style={styles.negarButtonText}>Negar</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 
@@ -273,65 +275,95 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 16,
+    backgroundColor: "#f5f5f5",
   },
   title: {
     fontSize: 24,
-    marginBottom: 10,
-    marginTop: 20,
+    fontWeight: "bold",
+    marginBottom: 20,
+    color: "#333",
   },
   subtitulo: {
     fontSize: 18,
+    fontWeight: "600",
     marginBottom: 10,
+    color: "#555",
   },
   quadrado: {
     width: "100%",
-    height: "40%",
+    padding: 10,
     borderWidth: 1,
-    borderColor: "gray",
-    marginBottom: 15,
-    justifyContent: "center",
-    alignItems: "center",
+    borderColor: "#ddd",
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    marginBottom: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 5,
   },
   empresaContainer: {
     flexDirection: "row",
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 10,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
   },
   empresaNome: {
-    fontSize: 18,
-    marginRight: 10,
+    fontSize: 16,
+    color: "#333",
   },
   entrarButton: {
     backgroundColor: "#007bff",
-    padding: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 15,
     borderRadius: 5,
   },
   entrarButtonText: {
     color: "#fff",
+    fontSize: 14,
+  },
+  solicitacaoContainer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  solicitacaoNome: {
     fontSize: 16,
+    color: "#333",
+  },
+  solicitacaoButtons: {
+    flexDirection: "row",
   },
   aceitarButton: {
     backgroundColor: "#28a745",
-    padding: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 15,
     borderRadius: 5,
-    marginLeft: 10,
+    marginRight: 10,
   },
   aceitarButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14,
   },
   negarButton: {
     backgroundColor: "#dc3545",
-    padding: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 15,
     borderRadius: 5,
-    marginLeft: 10,
   },
   negarButtonText: {
     color: "#fff",
-    fontSize: 16,
+    fontSize: 14,
   },
   error: {
     color: "red",
+    textAlign: "center",
   },
 });
 

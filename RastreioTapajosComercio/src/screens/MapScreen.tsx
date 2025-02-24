@@ -8,7 +8,6 @@ import {
   startLocationUpdatesAsync,
   stopLocationUpdatesAsync
 } from 'expo-location';
-import { styles } from '../styles/styles';
 import { getToken } from '../utils/auth';
 import { API_BASE_URL } from '@env';
 import { LOCATION_TASK_NAME } from '../tasks/LocationTask';
@@ -237,7 +236,7 @@ const MapScreen = ({ onLogout, id_empresa }: { onLogout: () => void, id_empresa:
   };
 
   return (
-    <View style={styles.container}>
+    <View style={localStyles.container}>
       <TouchableOpacity style={localStyles.backButton} onPress={handleBack}>
         <Text style={localStyles.logoutButton}>Voltar</Text>
       </TouchableOpacity>
@@ -264,10 +263,12 @@ const localStyles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+    backgroundColor: '#f5f5f5',
   },
   buttonContainer: {
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 20,
   },
   buttonImage: {
     width: 100,
@@ -276,11 +277,11 @@ const localStyles = StyleSheet.create({
   backButton: {
     position: 'absolute',
     top: 50,
-    right: 16,
+    left: 16,
   },
   logoutButton: {
     fontSize: 20,
-    color: 'blue',
+    color: '#007bff',
   },
   trackingOnText: {
     fontSize: 16,

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Image } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, Image, ImageBackground } from 'react-native';
 import { API_BASE_URL } from '@env';
 
 const RegisterScreen = ({ onRegister, onNavigateToLogin }: { onRegister: () => void, onNavigateToLogin: () => void }) => {
@@ -37,37 +37,50 @@ const RegisterScreen = ({ onRegister, onNavigateToLogin }: { onRegister: () => v
   };
 
   return (
-    <View style={styles.container}>
-      <Image source={require('../../assets/LOGO_1.png')} style={styles.logo} />
-      <TextInput
-        style={styles.input}
-        placeholder="Nome"
-        value={nome}
-        onChangeText={setNome}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Senha"
-        value={senha}
-        onChangeText={setSenha}
-        secureTextEntry
-      />
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-      {message ? <Text style={styles.message}>{message}</Text> : null}
-      <Button title="Registrar" onPress={handleRegister} />
-      <View style={styles.buttonSpacing} />
-      <Button title="Voltar" onPress={onNavigateToLogin} />
-    </View>
+    <ImageBackground source={require('../../assets/MOBILE.png')} style={styles.background}>
+      <View style={styles.container}>
+        <Image source={require('../../assets/LOGO_1.png')} style={styles.logo} />
+        <TextInput
+          style={styles.input}
+          placeholder="Nome"
+          value={nome}
+          onChangeText={setNome}
+          placeholderTextColor="#007bff"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          value={email}
+          onChangeText={setEmail}
+          placeholderTextColor="#007bff"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Senha"
+          value={senha}
+          onChangeText={setSenha}
+          secureTextEntry
+          placeholderTextColor="#007bff"
+        />
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {message ? <Text style={styles.message}>{message}</Text> : null}
+        <View style={styles.buttonContainer}>
+          <Button title="Registrar" onPress={handleRegister} color="#007bff" />
+        </View>
+        <View style={styles.buttonSpacing} />
+        <View style={styles.buttonContainer}>
+          <Button title="Voltar" onPress={onNavigateToLogin} color="#007bff" />
+        </View>
+      </View>
+    </ImageBackground>
   );
 };
 
 const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    resizeMode: 'cover',
+  },
   container: {
     flex: 1,
     justifyContent: 'center',
@@ -81,24 +94,30 @@ const styles = StyleSheet.create({
   },
   input: {
     height: 40,
-    borderColor: 'gray',
+    borderColor: '#007bff',
     borderWidth: 1,
+    borderRadius: 10,
     marginBottom: 12,
     paddingHorizontal: 8,
-    // fontFamily: 'Poppins-Regular', // Comentado temporariamente
+    color: '#007bff',
+    backgroundColor: 'rgba(255, 255, 255, 0.8)',
   },
   error: {
     color: 'red',
     marginBottom: 12,
-    // fontFamily: 'Poppins-Regular', // Comentado temporariamente
+    textAlign: 'center',
   },
   message: {
     color: 'green',
     marginBottom: 12,
-    // fontFamily: 'Poppins-Regular', // Comentado temporariamente
+    textAlign: 'center',
   },
   buttonSpacing: {
     height: 10, // Adjust the height as needed for spacing
+  },
+  buttonContainer: {
+    borderRadius: 10,
+    overflow: 'hidden',
   },
 });
 
