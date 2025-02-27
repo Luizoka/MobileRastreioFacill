@@ -32,14 +32,14 @@ const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, o
       } else if (response.status === 401) {
         const data = await response.json();
         console.error('Login error:', data.error);
-        setError('Login failed. Please check your credentials.');
+        setError('Falha no login. Verifique suas credenciais.');
       } else {
         console.error('Login error:', response.statusText);
-        setError('Login failed. Please try again.');
+        setError('Falha no login. Tente novamente.');
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError('Login failed. Please check your credentials.');
+      setError('Falha no login. Verifique suas credenciais.');
     }
   };
 

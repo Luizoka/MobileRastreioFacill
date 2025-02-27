@@ -28,11 +28,11 @@ const RegisterScreen = ({ onRegister, onNavigateToLogin }: { onRegister: () => v
       } else {
         const data = await response.json();
         console.error('Register error:', data.error);
-        setError('Registration failed. Please try again.');
+        setError('Falha no cadastro. Tente novamente.');
       }
     } catch (err) {
       console.error('Register error:', err);
-      setError('Registration failed. Please check your credentials.');
+      setError('Falha no cadastro. Verifique suas credenciais.');
     }
   };
 

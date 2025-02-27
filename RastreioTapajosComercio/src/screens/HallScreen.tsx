@@ -7,9 +7,20 @@ import {
   FlatList,
   TouchableOpacity,
   SafeAreaView,
+  Image,
 } from "react-native";
+import {
+  getCurrentPositionAsync,
+  LocationObject,
+  watchPositionAsync,
+  LocationAccuracy,
+  startLocationUpdatesAsync,
+  stopLocationUpdatesAsync,
+} from "expo-location";
 import { removeToken, getToken } from "../utils/auth";
 import { API_BASE_URL } from "@env";
+import { LOCATION_TASK_NAME } from "../tasks/LocationTask";
+import { Alert } from "react-native";
 
 interface Empresa {
   id: number;
@@ -30,30 +41,24 @@ interface Solicitacao {
   status: string;
   data_envio: string;
   data_resposta: string | null;
-  nome?: string; // Adicionando o campo nome opcionalmente
+  nome?: string;
 }
 
-const HallScreen = ({
-  onNavigateToMap,
-  onLogout,
-  onNavigateToLogin,
-}: {
-  onNavigateToMap: (id_empresa: number) => void;
+interface HallScreenProps {
   onLogout: () => void;
   onNavigateToLogin: () => void;
-}) => {
+  onNavigateToMap: (id_empresa: number) => void; // Adicionado
+}
+
+const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreenProps) => {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([]);
   const [error, setError] = useState("");
+  const [trackingStatus, setTrackingStatus] = useState<{ [key: number]: boolean }>({});
+  const [selectedEmpresaId, setSelectedEmpresaId] = useState<number | null>(null);
 
   const prevEmpresasRef = useRef<Empresa[]>([]);
   const prevSolicitacoesRef = useRef<Solicitacao[]>([]);
-
-  const handleLogout = async () => {
-    await removeToken();
-    onLogout();
-    onNavigateToLogin();
-  };
 
   const fetchEmpresas = async () => {
     const token = await getToken();
@@ -61,22 +66,17 @@ const HallScreen = ({
       setError("Token not found");
       return;
     }
-  
+
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/funcionario/empresas-vinculadas`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-  
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/empresas-vinculadas`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
       if (response.status === 200) {
         const data = await response.json();
-        console.log("Empresas:", data);
-  
         if (JSON.stringify(data) !== JSON.stringify(prevEmpresasRef.current)) {
           setEmpresas(data);
           prevEmpresasRef.current = data;
@@ -88,7 +88,7 @@ const HallScreen = ({
         const data = await response.json();
         setError(data.error || "Erro ao buscar empresas.");
       }
-    } catch (error) {
+    } catch {
       setError("Erro ao buscar empresas.");
     }
   };
@@ -101,21 +101,17 @@ const HallScreen = ({
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/funcionario/solicitacoes`,
-        {
-          method: "GET",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/solicitacoes`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.status === 200) {
         const data: Solicitacao[] = await response.json();
-        console.log("Solicitações:", data);
 
-        // Obter o nome da empresa para cada solicitação
+        // Carrega o nome da empresa para cada solicitação
         const solicitacoesComNome = await Promise.all(
           data.map(async (solicitacao) => {
             const empresaResponse = await fetch(
@@ -131,8 +127,6 @@ const HallScreen = ({
             return { ...solicitacao, nome: empresaData.nome };
           })
         );
-
-        // Verificar se os dados mudaram
         if (JSON.stringify(solicitacoesComNome) !== JSON.stringify(prevSolicitacoesRef.current)) {
           setSolicitacoes(solicitacoesComNome);
           prevSolicitacoesRef.current = solicitacoesComNome;
@@ -144,7 +138,7 @@ const HallScreen = ({
         const data = await response.json();
         setError(data.error || "Erro ao buscar solicitações.");
       }
-    } catch (error) {
+    } catch {
       setError("Erro ao buscar solicitações.");
     }
   };
@@ -163,9 +157,7 @@ const HallScreen = ({
     const interval = setInterval(() => {
       fetchEmpresas();
       fetchSolicitacoes();
-      console.log("Atualizou a tela");
     }, 60000); // 1 minuto
-
     return () => clearInterval(interval);
   }, [empresas]);
 
@@ -177,31 +169,237 @@ const HallScreen = ({
     }
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/funcionario/responder-solicitacao`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            id_solicitacao: id,
-            status: status,
-          }),
-        }
-      );
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/responder-solicitacao`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ id_solicitacao: id, status }),
+      });
 
       if (response.status === 200) {
-        // Atualizar a lista de solicitações após responder
         fetchSolicitacoes();
         fetchEmpresas();
       } else {
         const data = await response.json();
-        setError(data.error || `Erro ao ${status === "aceita" ? "aceitar" : "negar"} solicitação.`);
+        setError(
+          data.error || `Erro ao ${status === "aceita" ? "aceitar" : "negar"} solicitação.`
+        );
+      }
+    } catch {
+      setError(`Erro ao ${status === "aceita" ? "aceitar" : "negar"} solicitação.`);
+    }
+  };
+
+  const sendCurrentLocation = async (latitude: string, longitude: string) => {
+    const token = await getToken();
+    if (!token) {
+      console.error("Token not found");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/enviar-localizacao-atual`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ latitude, longitude, id_empresa: selectedEmpresaId }),
+      });
+
+      if (response.status === 500) {
+        const data = await response.json();
+        if (data.error === "Erro ao buscar vínculo do funcionário.") {
+          console.error("Error: Erro ao buscar vínculo do funcionário.");
+        } else if (data.error === "Erro ao atualizar a localização atual.") {
+          console.error("Error: Erro ao atualizar a localização atual.");
+        } else {
+          console.error("Error: Erro desconhecido ao enviar localização.");
+        }
+      } else if (response.status === 404) {
+        const data = await response.json();
+        if (data.error === "Nenhum vínculo ativo encontrado para a empresa especificada.") {
+          console.error("Error: Nenhum vínculo ativo encontrado para a empresa especificada.");
+        } else {
+          console.error("Error: Erro desconhecido ao enviar localização.");
+        }
+      } else {
+        const data = await response.json();
+        console.log("Current location response:", data);
       }
     } catch (error) {
-      setError(`Erro ao ${status === "aceita" ? "aceitar" : "negar"} solicitação.`);
+      console.error("Error sending current location:", error);
+    }
+  };
+
+  // const addLocationToHistory = async (latitude: string, longitude: string) => {
+  //   const token = await getToken();
+  //   if (!token) {
+  //     console.error("Token not found");
+  //     return;
+  //   }
+
+  //   try {
+  //     console.log("Adding location to history:", { latitude, longitude });
+  //     const response = await fetch(
+  //       `${API_BASE_URL}/api/funcionario/adicionar-historico-localizacao`,
+  //       {
+  //         method: "POST",
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //           Authorization: `Bearer ${token}`,
+  //         },
+  //         body: JSON.stringify({ latitude, longitude, id_empresa: selectedEmpresaId }),
+  //       }
+  //     );
+
+  //     if (response.status === 500) {
+  //       const data = await response.json();
+  //       if (data.error === "Erro ao buscar vínculo do funcionário.") {
+  //         console.error("Error: Erro ao buscar vínculo do funcionário.");
+  //       } else if (data.error === "Erro ao adicionar ao histórico de localizações.") {
+  //         console.error("Error: Erro ao adicionar ao histórico de localizações.");
+  //       } else {
+  //         console.error("Error: Erro desconhecido ao adicionar ao histórico.");
+  //       }
+  //     } else if (response.status === 404) {
+  //       const data = await response.json();
+  //       if (data.error === "Nenhum vínculo ativo encontrado para a empresa especificada.") {
+  //         console.error("Error: Nenhum vínculo ativo encontrado para a empresa especificada.");
+  //       } else {
+  //         console.error("Error: Erro desconhecido ao adicionar ao histórico.");
+  //       }
+  //     } else {
+  //       const data = await response.json();
+  //       console.log("Location history response:", data);
+  //     }
+  //   } catch (error) {
+  //     console.error("Error adding location to history:", error);
+  //   }
+  // };
+
+  const activateApp = async () => {
+    const token = await getToken();
+    if (!token) {
+      console.error("Token not found");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/ativar-app`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id_empresa: selectedEmpresaId }),
+      });
+
+      if (response.status === 200) {
+        const data = await response.json();
+        console.log("App activation response:", data);
+      } else if (response.status === 500) {
+        const data = await response.json();
+        console.error("Error:", data.error);
+      }
+    } catch (error) {
+      console.error("Error activating app:", error);
+    }
+  };
+
+  const deactivateApp = async () => {
+    const token = await getToken();
+    if (!token) {
+      console.error("Token not found");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/funcionario/desativar-app`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ id_empresa: selectedEmpresaId }),
+      });
+
+      if (response.status === 200) {
+        const data = await response.json();
+        console.log("App deactivation response:", data);
+      } else if (response.status === 500) {
+        const data = await response.json();
+        console.error("Error:", data.error);
+      }
+    } catch (error) {
+      console.error("Error deactivating app:", error);
+    }
+  };
+
+  useEffect(() => {
+    const requestLocationPermissions = async () => {
+      try {
+        await getCurrentPositionAsync();
+      } catch (error) {
+        console.error("Error requesting location permissions:", error);
+      }
+    };
+    requestLocationPermissions();
+  }, []);
+
+  useEffect(() => {
+    let subscription: any = null;
+    // Percorre o objeto trackingStatus para ver quais empresas estão ativas
+    for (const empresaId in trackingStatus) {
+      if (trackingStatus[empresaId]) {
+        (async () => {
+          try {
+            subscription = await watchPositionAsync(
+              {
+                accuracy: LocationAccuracy.Highest,
+                timeInterval: 10000,
+                distanceInterval: 1,
+              },
+              (response) => {
+                sendCurrentLocation(
+                  response.coords.latitude.toString(),
+                  response.coords.longitude.toString()
+                );
+                // addLocationToHistory(...)  // Mantenha comentado
+              }
+            );
+          } catch (error) {
+            console.error("Error starting watchPositionAsync:", error);
+          }
+        })();
+      }
+    }
+    return () => {
+      if (subscription) {
+        subscription.remove();
+      }
+    };
+  }, [trackingStatus]);
+
+  const handleToggleTracking = async (id_empresa: number) => {
+    setSelectedEmpresaId(id_empresa);
+    try {
+      if (trackingStatus[id_empresa]) {
+        await deactivateApp();
+        await stopLocationUpdatesAsync(LOCATION_TASK_NAME);
+        setTrackingStatus((prev) => ({ ...prev, [id_empresa]: false }));
+      } else {
+        await activateApp();
+        await startLocationUpdatesAsync(LOCATION_TASK_NAME, {
+          accuracy: LocationAccuracy.High,
+          distanceInterval: 100,
+        });
+        setTrackingStatus((prev) => ({ ...prev, [id_empresa]: true }));
+      }
+    } catch (error) {
+      console.error("Error toggling tracking:", error);
     }
   };
 
@@ -209,10 +407,21 @@ const HallScreen = ({
     <View style={styles.empresaContainer}>
       <Text style={styles.empresaNome}>{item.nome}</Text>
       <TouchableOpacity
-        style={styles.entrarButton}
-        onPress={() => onNavigateToMap(item.id)}
+        style={
+          trackingStatus[item.id]
+            ? [styles.trackingButtonOn,]
+            : [styles.trackingButtonOff,]
+        }
+        onPress={() => handleToggleTracking(item.id)}
       >
-        <Text style={styles.entrarButtonText}>Entrar</Text>
+        <Image
+          source={
+            trackingStatus[item.id]
+              ? require("../../assets/botao_ligado.png")
+              : require("../../assets/botao_desligado.png")
+          }
+          style={styles.buttonImage}
+        />
       </TouchableOpacity>
     </View>
   );
@@ -237,9 +446,30 @@ const HallScreen = ({
     </View>
   );
 
+  const handleExitConfirmation = () => {
+  Alert.alert(
+    "Confirmar saída",
+    "Deseja interromper o envio de localização e voltar para a tela de login?",
+    [
+      {
+        text: "Cancelar",
+        style: "cancel",
+      },
+      {
+        text: "Sim",
+        onPress: async () => {
+          await removeToken();
+          onLogout();
+          onNavigateToLogin();
+        },
+      },
+    ]
+  );
+};
+
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Bem-vindo ao Hall</Text>
+      <Text style={styles.title}>Bem-vindo ao Rastreio Fácil</Text>
       <Text style={styles.subtitulo}>Empresas Vinculadas:</Text>
       <View style={styles.quadrado}>
         {error && !empresas.length ? (
@@ -264,7 +494,7 @@ const HallScreen = ({
           />
         )}
       </View>
-      <Button title="Logout" onPress={handleLogout} />
+      <Button title="Sair" onPress={handleExitConfirmation} />
     </SafeAreaView>
   );
 };
@@ -321,9 +551,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 15,
     borderRadius: 5,
   },
-  entrarButtonText: {
-    color: "#fff",
-    fontSize: 14,
+  buttonImage: {
+    width: 30,
+    height: 30,
   },
   solicitacaoContainer: {
     flexDirection: "row",
@@ -364,6 +594,16 @@ const styles = StyleSheet.create({
   error: {
     color: "red",
     textAlign: "center",
+  },
+  trackingButtonOn: {
+    paddingVertical: 5,
+    paddingHorizontal: 15,
+    borderRadius: 5,
+  },
+  trackingButtonOff: {
+    paddingVertical: 5,
+    paddingHorizontal: 15,
+    borderRadius: 5,
   },
 });
 
