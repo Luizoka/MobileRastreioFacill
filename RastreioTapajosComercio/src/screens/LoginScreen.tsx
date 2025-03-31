@@ -14,10 +14,11 @@ import {
   ScrollView,
   ActivityIndicator,
   Keyboard,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback,
+  Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { startBackgroundUpdate } from '../tasks/LocationTask';
+import { startBackgroundUpdate, checkBackgroundLocationAvailable } from '../tasks/LocationTask';
 import { API_BASE_URL } from '@env';
 
 const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, onNavigateToRegister: () => void }) => {
@@ -87,8 +88,34 @@ const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, o
         console.log('Resposta de login:', data);
         const { token } = data;
         await AsyncStorage.setItem('token', token);
-        await startBackgroundUpdate();
-        onLogin();
+        
+        // Verificar se o usuário permite rastreamento em segundo plano
+        const hasBackgroundPermission = await checkBackgroundLocationAvailable();
+        
+        if (hasBackgroundPermission) {
+          // Se tiver permissão, perguntar se deseja ativar agora
+          Alert.alert(
+            "Rastreamento em Segundo Plano",
+            "Deseja ativar o rastreamento em segundo plano? Isso permite que o aplicativo envie sua localização mesmo quando estiver fechado.",
+            [
+              { 
+                text: "Não Agora", 
+                style: "cancel",
+                onPress: () => onLogin()
+              },
+              { 
+                text: "Ativar", 
+                onPress: async () => {
+                  await startBackgroundUpdate();
+                  onLogin();
+                }
+              }
+            ]
+          );
+        } else {
+          // Se não tiver permissão, apenas continuar
+          onLogin();
+        }
       } else if (response.status === 403) {
         console.error('Erro de login: Usuário inativo');
         setError(`Usuário não ativado. Verifique sua caixa de entrada em ${email} para ativar sua conta.`);

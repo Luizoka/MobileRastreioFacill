@@ -14,6 +14,8 @@ import {
   Platform,
   StatusBar,
   ScrollView,
+  AppState,
+  AppStateStatus,
 } from "react-native";
 import {
   getCurrentPositionAsync,
@@ -22,10 +24,20 @@ import {
   LocationAccuracy,
   startLocationUpdatesAsync,
   stopLocationUpdatesAsync,
+  hasStartedLocationUpdatesAsync,
+  requestBackgroundPermissionsAsync,
+  requestForegroundPermissionsAsync,
 } from "expo-location";
 import { removeToken, getToken } from "../utils/auth";
 import { API_BASE_URL } from "@env";
-import { LOCATION_TASK_NAME } from "../tasks/LocationTask";
+import { 
+  LOCATION_TASK_NAME, 
+  startBackgroundUpdate, 
+  stopBackgroundUpdate, 
+  sendLocationToApi,
+  isBackgroundTrackingActive,
+  checkBackgroundLocationAvailable
+} from "../tasks/LocationTask";
 import { Alert } from "react-native";
 
 interface Empresa {
@@ -72,6 +84,14 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
 
   const prevEmpresasRef = useRef<Empresa[]>([]);
   const prevSolicitacoesRef = useRef<Solicitacao[]>([]);
+
+  const [locationPermission, setLocationPermission] = useState(false);
+  const [backgroundPermission, setBackgroundPermission] = useState(false);
+  const [activeCompanies, setActiveCompanies] = useState<number[]>([]);
+  const [foregroundLocationActive, setForegroundLocationActive] = useState(false);
+  
+  const appState = useRef(AppState.currentState);
+  const foregroundLocationInterval = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     Animated.parallel([
@@ -323,160 +343,368 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
     }
   };
 
-  const sendCurrentLocation = async (latitude: string, longitude: string) => {
-    const token = await getToken();
-    if (!token) {
-      console.error("Token não encontrado");
-      return;
-    }
+  // Verificar permissões de localização ao iniciar
+  useEffect(() => {
+    console.log("🔍 Verificando permissões de localização...");
+    const checkPermissions = async () => {
+      const { status: foregroundStatus } = await requestForegroundPermissionsAsync();
+      console.log("📱 Status da permissão de localização em primeiro plano:", foregroundStatus);
+      setLocationPermission(foregroundStatus === 'granted');
+      
+      const { status: backgroundStatus } = await requestBackgroundPermissionsAsync();
+      console.log("📱 Status da permissão de localização em segundo plano:", backgroundStatus);
+      setBackgroundPermission(backgroundStatus === 'granted');
+    };
+    
+    checkPermissions();
+  }, []);
 
-    try {
-      // Decodificar o token para obter o ID do usuário
-      const tokenParts = token.split('.');
-      const payload = JSON.parse(atob(tokenParts[1]));
-      const userId = payload.id;
-
-      // Preparar o body com o formato correto
-      const requestBody = {
-        user_id: userId,
-        latitude: latitude,
-        longitude: longitude,
-        company_ids: [selectedEmpresaId] // Enviando para a empresa selecionada
-      };
-
-      const response = await fetch(`${API_BASE_URL}/api/location-histories`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const responseText = await response.text();
-      let data;
-
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error("Erro ao analisar resposta JSON:", e);
-        return;
+  // Monitorar mudanças no estado do aplicativo (foreground/background)
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    return () => {
+      subscription.remove();
+      if (foregroundLocationInterval.current) {
+        clearInterval(foregroundLocationInterval.current);
+        foregroundLocationInterval.current = null;
       }
+    };
+  }, [trackingStatus, activeCompanies]);
 
-      if (response.status === 201) {
-        console.log("Localização enviada com sucesso:", data);
-        
-        // Verificar se há erros mesmo com status 201
-        if (data.errors && data.errors.length > 0) {
-          console.warn("Localização enviada, mas com avisos:", data.errors);
-          // Aqui você poderia implementar alguma lógica para lidar com esses avisos,
-          // como mostrar um alerta ao usuário ou registrar os erros
-        }
-      } else if (response.status === 404) {
-        console.error("Erro 404:", data.error);
-        // O usuário não foi encontrado
+  // Função para lidar com mudanças no estado do aplicativo
+  const handleAppStateChange = (nextAppState: AppStateStatus) => {
+    if (appState.current === 'active' && nextAppState.match(/inactive|background/)) {
+      // App está indo para o background
+      if (activeCompanies.length > 0 && !isBackgroundTrackingActive) {
+        // Há empresas com rastreamento ativo, mas o background tracking não está ativo
         Alert.alert(
-          "Erro",
-          "Usuário não encontrado. Por favor, faça login novamente.",
+          "Rastreamento em segundo plano",
+          "O aplicativo continuará enviando sua localização apenas enquanto estiver aberto. Para manter o rastreamento mesmo com o app fechado, ative o rastreamento em segundo plano.",
           [
-            {
-              text: "OK",
+            { text: "Ignorar", style: "cancel" },
+            { 
+              text: "Ativar", 
               onPress: async () => {
-                await removeToken();
-                onLogout();
-                onNavigateToLogin();
-              },
-            },
+                const success = await startBackgroundUpdate();
+                if (success) {
+                  Alert.alert(
+                    "Sucesso",
+                    "Rastreamento em segundo plano ativado com sucesso!"
+                  );
+                } else {
+                  Alert.alert(
+                    "Erro",
+                    "Não foi possível ativar o rastreamento em segundo plano. Verifique as permissões do aplicativo."
+                  );
+                }
+              }
+            }
           ]
         );
-      } else if (response.status === 500) {
-        console.error("Erro 500:", data.error);
-        // Poderia adicionar uma lógica para tentar novamente após um tempo
+      }
+    } else if (appState.current.match(/inactive|background/) && nextAppState === 'active') {
+      // App está voltando para o primeiro plano
+      if (activeCompanies.length > 0) {
+        // Reiniciar o rastreamento em primeiro plano se necessário
+        startForegroundLocationUpdates();
+      }
+    }
+    
+    appState.current = nextAppState;
+  };
+
+  // Função para iniciar o rastreamento em primeiro plano
+  const startForegroundLocationUpdates = () => {
+    console.log("🚀 Iniciando rastreamento em primeiro plano");
+    
+    if (foregroundLocationInterval.current) {
+      console.log("🧹 Limpando intervalo anterior");
+      clearInterval(foregroundLocationInterval.current);
+    }
+    
+    // Imediatamente obter e enviar a localização atual
+    console.log("📍 Obtendo posição inicial...");
+    getCurrentPositionAndSend();
+    
+    console.log("⏱️ Configurando intervalo de 30 segundos para atualização");
+    // Configurar intervalo para obter e enviar a localização periodicamente
+    foregroundLocationInterval.current = setInterval(() => {
+      console.log("⏱️ Executando atualização agendada");
+      getCurrentPositionAndSend();
+    }, 30000); // A cada 30 segundos
+    
+    setForegroundLocationActive(true);
+    console.log("✅ Rastreamento em primeiro plano ativado com sucesso");
+    
+    // Adicionar um alerta explícito sobre o rastreamento ativo
+    Alert.alert(
+      "Rastreamento Ativado",
+      "O rastreamento de localização está ativo enquanto o aplicativo estiver aberto. Sua localização será enviada a cada 30 segundos.",
+      [{ text: "OK" }]
+    );
+  };
+
+  // Função para parar o rastreamento em primeiro plano
+  const stopForegroundLocationUpdates = () => {
+    if (foregroundLocationInterval.current) {
+      clearInterval(foregroundLocationInterval.current);
+      foregroundLocationInterval.current = null;
+    }
+    setForegroundLocationActive(false);
+  };
+
+  // Função para obter a posição atual e enviar para a API
+  const getCurrentPositionAndSend = async () => {
+    console.log("🔍 Iniciando getCurrentPositionAndSend");
+    console.log("🔍 Permissão de localização:", locationPermission);
+    console.log("🔍 Empresas ativas:", activeCompanies);
+    
+    if (!locationPermission || activeCompanies.length === 0) {
+      console.log("⚠️ Não foi possível obter localização: Sem permissão ou sem empresas ativas");
+      return;
+    }
+    
+    try {
+      console.log("📍 Solicitando posição atual...");
+      const position = await getCurrentPositionAsync({
+        accuracy: LocationAccuracy.High
+      });
+      
+      console.log("📍 Posição obtida:", position.coords);
+      const { latitude, longitude } = position.coords;
+      
+      console.log("📍 Enviando posição para empresas:", activeCompanies);
+      
+      // Aqui estamos utilizando diretamente os valores numéricos
+      const result = await sendLocationToApi(
+        latitude, 
+        longitude, 
+        activeCompanies
+      );
+      
+      console.log("📍 Resultado do envio:", result);
+      
+      if (result.success) {
+        console.log("✅ Localização enviada com sucesso!");
+        // Alert.alert("Sucesso", "Localização enviada com sucesso!");
       } else {
-        console.error(`Erro não específico (${response.status}):`, data);
+        console.error("❌ Falha ao enviar localização:", result.error);
+        Alert.alert(
+          "Erro ao Enviar Localização",
+          result.error || "Não foi possível enviar sua localização. Tente novamente."
+        );
+        
+        if (result.status === 404) {
+          Alert.alert(
+            "Erro",
+            "Usuário não encontrado. Por favor, faça login novamente.",
+            [
+              {
+                text: "OK",
+                onPress: async () => {
+                  await removeToken();
+                  onLogout();
+                  onNavigateToLogin();
+                },
+              },
+            ]
+          );
+        }
       }
     } catch (error) {
-      console.error("Erro ao enviar localização:", error);
+      console.error("❌ Erro ao obter posição atual:", error);
+      
+      // Adicionando mais detalhes sobre o erro
+      if (error instanceof Error) {
+        console.error("❌ Detalhes do erro:", error.message);
+        console.error("❌ Stack trace:", error.stack);
+      }
+      
+      Alert.alert(
+        "Erro de Localização",
+        "Não foi possível obter sua localização atual. Verifique se o GPS está ativado e se o aplicativo tem permissão para acessá-lo.",
+        [{ text: "OK" }]
+      );
     }
   };
 
-  useEffect(() => {
-    const requestLocationPermissions = async () => {
-      try {
-        await getCurrentPositionAsync();
-      } catch (error) {
-        console.error("Error requesting location permissions:", error);
-      }
-    };
-    requestLocationPermissions();
-  }, []);
-
-  useEffect(() => {
-    let subscription: any = null;
-    // Percorre o objeto trackingStatus para ver quais empresas estão ativas
-    for (const empresaId in trackingStatus) {
-      if (trackingStatus[empresaId]) {
-        (async () => {
-          try {
-            subscription = await watchPositionAsync(
-              {
-                accuracy: LocationAccuracy.Highest,
-                timeInterval: 10000,
-                distanceInterval: 1,
-              },
-              (response) => {
-                sendCurrentLocation(
-                  response.coords.latitude.toString(),
-                  response.coords.longitude.toString()
-                );
-              }
-            );
-          } catch (error) {
-            console.error("Error starting watchPositionAsync:", error);
-          }
-        })();
-      }
-    }
-    return () => {
-      if (subscription) {
-        subscription.remove();
-      }
-    };
-  }, [trackingStatus]);
-
+  // Modificação da função handleToggleTracking
   const handleToggleTracking = async (id_empresa: number) => {
-    setSelectedEmpresaId(id_empresa);
+    console.log("🔄 Alternando rastreamento para empresa:", id_empresa);
+    console.log("🔄 Estado atual:", trackingStatus[id_empresa] ? "ATIVO" : "INATIVO");
+    
     try {
       if (trackingStatus[id_empresa]) {
-        await stopLocationUpdatesAsync(LOCATION_TASK_NAME);
-        setTrackingStatus((prev) => ({ ...prev, [id_empresa]: false }));
-      } else {
-        await startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-          accuracy: LocationAccuracy.High,
-          distanceInterval: 100,
+        console.log("🛑 Desativando rastreamento...");
+        
+        // Desativar rastreamento para esta empresa
+        setActiveCompanies(prev => {
+          const updated = prev.filter(id => id !== id_empresa);
+          console.log("🛑 Empresas ativas atualizadas:", updated);
+          return updated;
         });
-        setTrackingStatus((prev) => ({ ...prev, [id_empresa]: true }));
+        
+        setTrackingStatus(prev => {
+          const updated = { ...prev, [id_empresa]: false };
+          console.log("🛑 Status de rastreamento atualizado:", updated);
+          return updated;
+        });
+        
+        // Se não houver mais empresas ativas, parar o rastreamento em primeiro plano
+        const updatedActiveCompanies = activeCompanies.filter(id => id !== id_empresa);
+        if (updatedActiveCompanies.length === 0) {
+          console.log("🛑 Nenhuma empresa ativa restante, parando rastreamento em primeiro plano");
+          stopForegroundLocationUpdates();
+          if (isBackgroundTrackingActive) {
+            console.log("🛑 Parando rastreamento em segundo plano também");
+            await stopBackgroundUpdate();
+          }
+        }
+        
+        // Adicionando alerta para confirmar desativação
+        Alert.alert(
+          "Rastreamento Desativado",
+          "O rastreamento de localização para esta empresa foi desativado."
+        );
+      } else {
+        console.log("▶️ Ativando rastreamento...");
+        
+        // Verificar permissão de localização em primeiro plano
+        if (!locationPermission) {
+          console.log("📱 Solicitando permissão de localização...");
+          const { status } = await requestForegroundPermissionsAsync();
+          console.log("📱 Status da permissão:", status);
+          
+          if (status !== 'granted') {
+            console.log("❌ Permissão negada");
+            Alert.alert(
+              "Permissão Necessária",
+              "O aplicativo precisa de permissão para acessar sua localização.",
+              [{ text: "OK" }]
+            );
+            return;
+          }
+          setLocationPermission(true);
+        }
+        
+        // Ativar rastreamento para esta empresa
+        setSelectedEmpresaId(id_empresa);
+        
+        setActiveCompanies(prev => {
+          const updated = [...prev, id_empresa];
+          console.log("▶️ Empresas ativas atualizadas:", updated);
+          return updated;
+        });
+        
+        setTrackingStatus(prev => {
+          const updated = { ...prev, [id_empresa]: true };
+          console.log("▶️ Status de rastreamento atualizado:", updated);
+          return updated;
+        });
+        
+        // Iniciar rastreamento em primeiro plano se ainda não estiver ativo
+        if (!foregroundLocationActive) {
+          console.log("▶️ Iniciando rastreamento em primeiro plano");
+          startForegroundLocationUpdates();
+        } else {
+          console.log("▶️ Rastreamento em primeiro plano já está ativo");
+          // Forçar um envio imediato de localização
+          getCurrentPositionAndSend();
+        }
+        
+        // Perguntar sobre ativar rastreamento em segundo plano
+        if (!backgroundPermission) {
+          Alert.alert(
+            "Rastreamento em Segundo Plano",
+            "Deseja ativar o rastreamento em segundo plano? Isso permite que o aplicativo continue rastreando sua localização mesmo quando estiver fechado.",
+            [
+              { 
+                text: "Não", 
+                style: "cancel",
+              },
+              { 
+                text: "Sim", 
+                onPress: async () => {
+                  const success = await startBackgroundUpdate();
+                  if (!success) {
+                    Alert.alert(
+                      "Aviso",
+                      "Não foi possível ativar o rastreamento em segundo plano. O rastreamento funcionará apenas com o aplicativo aberto."
+                    );
+                  } else {
+                    setBackgroundPermission(true);
+                  }
+                }
+              }
+            ]
+          );
+        } else if (!isBackgroundTrackingActive) {
+          // Já tem permissão, mas o rastreamento em segundo plano não está ativo
+          Alert.alert(
+            "Rastreamento em Segundo Plano",
+            "Deseja ativar o rastreamento em segundo plano? Isso permite que o aplicativo continue rastreando sua localização mesmo quando estiver fechado.",
+            [
+              { 
+                text: "Não", 
+                style: "cancel",
+              },
+              { 
+                text: "Sim", 
+                onPress: async () => {
+                  await startBackgroundUpdate();
+                }
+              }
+            ]
+          );
+        }
       }
     } catch (error) {
-      console.error("Error toggling tracking:", error);
+      console.error("❌ Erro ao alternar rastreamento:", error);
+      
+      // Mais detalhes sobre o erro
+      if (error instanceof Error) {
+        console.error("❌ Detalhes do erro:", error.message);
+        console.error("❌ Stack trace:", error.stack);
+      }
+      
+      Alert.alert(
+        "Erro",
+        "Não foi possível alternar o rastreamento. Tente novamente."
+      );
     }
   };
 
   const renderEmpresa = React.useCallback(({ item }: { item: Empresa }) => {
+    const isTracking = trackingStatus[item.id] || false;
+    const isBackgroundTracking = isTracking && isBackgroundTrackingActive;
+    
+    console.log(`🏢 Empresa ${item.name} (${item.id}): ${isTracking ? "Rastreamento ATIVO" : "Rastreamento INATIVO"}`);
+    
     return (
       <View style={styles.empresaContainer}>
-        <Text style={styles.empresaNome}>{item.name}</Text>
+        <View style={styles.empresaInfo}>
+          <Text style={styles.empresaNome}>{item.name}</Text>
+          {isTracking && (
+            <Text style={[
+              styles.trackingModeText, 
+              isBackgroundTracking ? styles.backgroundModeText : styles.foregroundModeText
+            ]}>
+              {isBackgroundTracking ? "Rastreamento contínuo" : "Rastreamento com app aberto"}
+            </Text>
+          )}
+        </View>
         <TouchableOpacity
           style={[
             styles.trackingButton,
-            trackingStatus[item.id] ? styles.trackingButtonOn : styles.trackingButtonOff
+            isTracking ? styles.trackingButtonOn : styles.trackingButtonOff
           ]}
           onPress={() => handleToggleTracking(item.id)}
           activeOpacity={0.7}
         >
           <Image
             source={
-              trackingStatus[item.id]
+              isTracking
                 ? require("../../assets/botao_ligado.png")
                 : require("../../assets/botao_desligado.png")
             }
@@ -485,7 +713,7 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
         </TouchableOpacity>
       </View>
     );
-  }, [trackingStatus, handleToggleTracking]);
+  }, [trackingStatus, handleToggleTracking, isBackgroundTrackingActive]);
 
   const renderSolicitacao = React.useCallback(({ item }: { item: Solicitacao }) => {
     return (
@@ -531,6 +759,33 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
       ]
     );
   };
+
+  // Adicione este useEffect após o existente que verifica permissões
+  useEffect(() => {
+    // Verificar status do rastreamento ao iniciar
+    const checkTrackingStatus = async () => {
+      console.log("Verificando status do rastreamento...");
+      
+      try {
+        // Obter as empresas que estavam sendo rastreadas antes
+        const currentActiveCompanies = activeCompanies;
+        
+        if (currentActiveCompanies.length > 0) {
+          console.log("Empresas ativas para rastreamento:", currentActiveCompanies);
+          
+          // Se havia rastreamento ativo, reiniciar
+          startForegroundLocationUpdates();
+          console.log("Rastreamento em primeiro plano reiniciado");
+        } else {
+          console.log("Nenhuma empresa com rastreamento ativo");
+        }
+      } catch (error) {
+        console.error("Erro ao verificar status do rastreamento:", error);
+      }
+    };
+    
+    checkTrackingStatus();
+  }, []);
 
   return (
     <>
@@ -688,6 +943,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#f0f0f0",
   },
+  empresaInfo: {
+    flex: 1,
+  },
   empresaNome: {
     fontSize: 16,
     fontWeight: "500",
@@ -806,6 +1064,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
+  },
+  trackingModeText: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  foregroundModeText: {
+    color: "#ff9800",
+    fontStyle: "italic",
+  },
+  backgroundModeText: {
+    color: "#28a745",
+    fontWeight: "500",
   },
 });
 
