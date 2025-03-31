@@ -34,14 +34,19 @@ export const startBackgroundUpdate = async () => {
     }
 
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-      accuracy: Location.Accuracy.High,
-      distanceInterval: 100,
-      timeInterval: 60000, // 1 minuto
+      accuracy: Location.Accuracy.Balanced,
+      distanceInterval: 200,
+      timeInterval: 180000,
+      deferredUpdatesInterval: 300000,
+      deferredUpdatesDistance: 500,
+      showsBackgroundLocationIndicator: true,
       foregroundService: {
         notificationTitle: 'Rastreio Fácil',
-        notificationBody: 'Rastreamento de localização ativo',
+        notificationBody: 'Rastreamento otimizado para economia de bateria',
         notificationColor: '#1a73e8',
       },
+      pausesUpdatesAutomatically: true,
+      activityType: Location.ActivityType.AutomotiveNavigation,
     });
     
     isBackgroundTrackingActive = true;
@@ -132,7 +137,7 @@ export const sendLocationToApi = async (latitude: string | number, longitude: st
 
       console.log("📡 Status da resposta:", response.status);
       const responseText = await response.text();
-      console.log("📥 Resposta bruta:", responseText);
+      console.log("📥 Resposta bruta da API:", responseText);
       
       let data;
 
@@ -163,6 +168,10 @@ export const sendLocationToApi = async (latitude: string | number, longitude: st
     }
   } catch (error) {
     console.error("❌ Exceção ao enviar localização:", error);
+    if (error instanceof Error) {
+      console.error("❌ Detalhes do erro:", error.message);
+      console.error("❌ Stack trace:", error.stack);
+    }
     return { success: false, error: "Erro ao enviar localização" };
   }
 };

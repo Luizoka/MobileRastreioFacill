@@ -39,6 +39,7 @@ import {
   checkBackgroundLocationAvailable
 } from "../tasks/LocationTask";
 import { Alert } from "react-native";
+import ProfileModal from '../components/ProfileModal';
 
 interface Empresa {
   id: number;
@@ -61,6 +62,12 @@ interface Solicitacao {
   request_date: string;
   response_date: string | null;
   companyName?: string;
+}
+
+interface UserProfile {
+  name: string;
+  email: string;
+  contact: string;
 }
 
 interface HallScreenProps {
@@ -92,6 +99,12 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
   
   const appState = useRef(AppState.currentState);
   const foregroundLocationInterval = useRef<NodeJS.Timeout | null>(null);
+
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileError, setProfileError] = useState("");
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileModalVisible, setProfileModalVisible] = useState(false);
 
   useEffect(() => {
     Animated.parallel([
@@ -414,7 +427,7 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
     appState.current = nextAppState;
   };
 
-  // Função para iniciar o rastreamento em primeiro plano
+  // Função para iniciar o rastreamento em primeiro plano com economia de bateria
   const startForegroundLocationUpdates = () => {
     console.log("🚀 Iniciando rastreamento em primeiro plano");
     
@@ -427,12 +440,12 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
     console.log("📍 Obtendo posição inicial...");
     getCurrentPositionAndSend();
     
-    console.log("⏱️ Configurando intervalo de 30 segundos para atualização");
-    // Configurar intervalo para obter e enviar a localização periodicamente
+    console.log("⏱️ Configurando intervalo de 60 segundos para atualização");
+    // Aumentado para 60 segundos para economizar bateria
     foregroundLocationInterval.current = setInterval(() => {
       console.log("⏱️ Executando atualização agendada");
       getCurrentPositionAndSend();
-    }, 30000); // A cada 30 segundos
+    }, 60000); // A cada 60 segundos
     
     setForegroundLocationActive(true);
     console.log("✅ Rastreamento em primeiro plano ativado com sucesso");
@@ -440,7 +453,7 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
     // Adicionar um alerta explícito sobre o rastreamento ativo
     Alert.alert(
       "Rastreamento Ativado",
-      "O rastreamento de localização está ativo enquanto o aplicativo estiver aberto. Sua localização será enviada a cada 30 segundos.",
+      "O rastreamento de localização está ativo enquanto o aplicativo estiver aberto. Para economia de bateria, sua localização será enviada a cada 60 segundos.",
       [{ text: "OK" }]
     );
   };
@@ -454,11 +467,9 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
     setForegroundLocationActive(false);
   };
 
-  // Função para obter a posição atual e enviar para a API
+  // Modifique a função getCurrentPositionAndSend para usar configurações de economia de bateria
   const getCurrentPositionAndSend = async () => {
     console.log("🔍 Iniciando getCurrentPositionAndSend");
-    console.log("🔍 Permissão de localização:", locationPermission);
-    console.log("🔍 Empresas ativas:", activeCompanies);
     
     if (!locationPermission || activeCompanies.length === 0) {
       console.log("⚠️ Não foi possível obter localização: Sem permissão ou sem empresas ativas");
@@ -466,9 +477,10 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
     }
     
     try {
-      console.log("📍 Solicitando posição atual...");
+      console.log("📍 Solicitando posição atual com economia de bateria...");
       const position = await getCurrentPositionAsync({
-        accuracy: LocationAccuracy.High
+        accuracy: LocationAccuracy.Balanced, // Precisão moderada para economizar bateria
+        mayShowUserSettingsDialog: false // Evita diálogos em primeiro plano
       });
       
       console.log("📍 Posição obtida:", position.coords);
@@ -588,29 +600,26 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
           setLocationPermission(true);
         }
         
+        // IMPORTANTE: Atualizar os estados localmente primeiro
+        const updatedActiveCompanies = [...activeCompanies, id_empresa];
+        const updatedTrackingStatus = { ...trackingStatus, [id_empresa]: true };
+        
         // Ativar rastreamento para esta empresa
         setSelectedEmpresaId(id_empresa);
+        setActiveCompanies(updatedActiveCompanies);
+        setTrackingStatus(updatedTrackingStatus);
         
-        setActiveCompanies(prev => {
-          const updated = [...prev, id_empresa];
-          console.log("▶️ Empresas ativas atualizadas:", updated);
-          return updated;
-        });
+        console.log("▶️ Empresas ativas atualizadas localmente:", updatedActiveCompanies);
+        console.log("▶️ Status de rastreamento atualizado localmente:", updatedTrackingStatus);
         
-        setTrackingStatus(prev => {
-          const updated = { ...prev, [id_empresa]: true };
-          console.log("▶️ Status de rastreamento atualizado:", updated);
-          return updated;
-        });
-        
-        // Iniciar rastreamento em primeiro plano se ainda não estiver ativo
+        // Iniciar rastreamento em primeiro plano com os novos valores
         if (!foregroundLocationActive) {
           console.log("▶️ Iniciando rastreamento em primeiro plano");
-          startForegroundLocationUpdates();
+          startForegroundLocationUpdatesWithCompanies(updatedActiveCompanies);
         } else {
           console.log("▶️ Rastreamento em primeiro plano já está ativo");
-          // Forçar um envio imediato de localização
-          getCurrentPositionAndSend();
+          // Forçar um envio imediato de localização com as empresas atualizadas
+          getCurrentPositionAndSendWithCompanies(updatedActiveCompanies);
         }
         
         // Perguntar sobre ativar rastreamento em segundo plano
@@ -671,6 +680,107 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
       Alert.alert(
         "Erro",
         "Não foi possível alternar o rastreamento. Tente novamente."
+      );
+    }
+  };
+
+  // Nova função que aceita as empresas como parâmetro
+  const startForegroundLocationUpdatesWithCompanies = (companies: number[]) => {
+    console.log("🚀 Iniciando rastreamento em primeiro plano para empresas:", companies);
+    
+    if (foregroundLocationInterval.current) {
+      console.log("🧹 Limpando intervalo anterior");
+      clearInterval(foregroundLocationInterval.current);
+    }
+    
+    // Imediatamente obter e enviar a localização atual
+    console.log("📍 Obtendo posição inicial...");
+    getCurrentPositionAndSendWithCompanies(companies);
+    
+    console.log("⏱️ Configurando intervalo de 60 segundos para atualização");
+    foregroundLocationInterval.current = setInterval(() => {
+      console.log("⏱️ Executando atualização agendada");
+      getCurrentPositionAndSend();
+    }, 60000); // A cada 60 segundos
+    
+    setForegroundLocationActive(true);
+    console.log("✅ Rastreamento em primeiro plano ativado com sucesso");
+    
+    Alert.alert(
+      "Rastreamento Ativado",
+      "O rastreamento de localização está ativo enquanto o aplicativo estiver aberto. Para economia de bateria, sua localização será enviada a cada 60 segundos.",
+      [{ text: "OK" }]
+    );
+  };
+
+  // Nova função que aceita as empresas como parâmetro
+  const getCurrentPositionAndSendWithCompanies = async (companies: number[]) => {
+    console.log("🔍 Iniciando getCurrentPositionAndSendWithCompanies para empresas:", companies);
+    
+    if (!locationPermission || companies.length === 0) {
+      console.log("⚠️ Não foi possível obter localização: Sem permissão ou sem empresas ativas");
+      return;
+    }
+    
+    try {
+      console.log("📍 Solicitando posição atual com economia de bateria...");
+      const position = await getCurrentPositionAsync({
+        accuracy: LocationAccuracy.Balanced,
+        mayShowUserSettingsDialog: false
+      });
+      
+      console.log("📍 Posição obtida:", position.coords);
+      const { latitude, longitude } = position.coords;
+      
+      console.log("📍 Enviando posição para empresas:", companies);
+      
+      // Enviar localização para API com as empresas especificadas
+      const result = await sendLocationToApi(
+        latitude, 
+        longitude, 
+        companies
+      );
+      
+      console.log("📍 Resultado do envio:", result);
+      
+      if (result.success) {
+        console.log("✅ Localização enviada com sucesso!");
+      } else {
+        console.error("❌ Falha ao enviar localização:", result.error);
+        Alert.alert(
+          "Erro ao Enviar Localização",
+          result.error || "Não foi possível enviar sua localização. Tente novamente."
+        );
+        
+        if (result.status === 404) {
+          Alert.alert(
+            "Erro",
+            "Usuário não encontrado. Por favor, faça login novamente.",
+            [
+              {
+                text: "OK",
+                onPress: async () => {
+                  await removeToken();
+                  onLogout();
+                  onNavigateToLogin();
+                },
+              },
+            ]
+          );
+        }
+      }
+    } catch (error) {
+      console.error("❌ Erro ao obter posição atual:", error);
+      
+      if (error instanceof Error) {
+        console.error("❌ Detalhes do erro:", error.message);
+        console.error("❌ Stack trace:", error.stack);
+      }
+      
+      Alert.alert(
+        "Erro de Localização",
+        "Não foi possível obter sua localização atual. Verifique se o GPS está ativado e se o aplicativo tem permissão para acessá-lo.",
+        [{ text: "OK" }]
       );
     }
   };
@@ -787,6 +897,66 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
     checkTrackingStatus();
   }, []);
 
+  const fetchUserProfile = async () => {
+    setProfileLoading(true);
+    setProfileError("");
+    
+    try {
+      const token = await getToken();
+      if (!token) {
+        setProfileError("Token não encontrado");
+        setProfileLoading(false);
+        return;
+      }
+      
+      // Decodificar o token para obter o ID do usuário
+      const tokenParts = token.split('.');
+      const payload = JSON.parse(atob(tokenParts[1]));
+      const userId = payload.id;
+      
+      const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      if (response.status === 200) {
+        const data = await response.json();
+        setUserProfile({
+          name: data.name,
+          email: data.email,
+          contact: data.contact
+        });
+      } else if (response.status === 404) {
+        setProfileError("Usuário não encontrado");
+      } else if (response.status === 500) {
+        setProfileError("Erro ao buscar dados do usuário");
+      } else {
+        const data = await response.json();
+        setProfileError(data.error || "Erro ao buscar perfil");
+      }
+    } catch (error) {
+      console.error("Erro ao buscar perfil:", error);
+      setProfileError("Erro ao buscar perfil");
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (showProfile) {
+      fetchUserProfile();
+    }
+  }, [showProfile]);
+
+  const toggleProfile = () => {
+    setShowProfile(!showProfile);
+    if (!showProfile && !userProfile) {
+      fetchUserProfile();
+    }
+  };
+
   return (
     <>
       <StatusBar backgroundColor="#1a73e8" barStyle="light-content" />
@@ -812,7 +982,45 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
           >
             <View style={styles.header}>
               <Text style={styles.title}>Rastreio Fácill</Text>
+              <TouchableOpacity 
+                style={styles.profileButton}
+                onPress={() => setProfileModalVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.profileButtonText}>Meu Perfil</Text>
+              </TouchableOpacity>
             </View>
+            
+            {showProfile && (
+              <View style={styles.profileSection}>
+                <Text style={styles.profileTitle}>Meu Perfil</Text>
+                {profileLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="small" color="#1a73e8" />
+                    <Text style={styles.loadingText}>Carregando dados...</Text>
+                  </View>
+                ) : profileError ? (
+                  <Text style={styles.error}>{profileError}</Text>
+                ) : userProfile ? (
+                  <View style={styles.profileData}>
+                    <View style={styles.profileItem}>
+                      <Text style={styles.profileLabel}>Nome:</Text>
+                      <Text style={styles.profileValue}>{userProfile.name}</Text>
+                    </View>
+                    <View style={styles.profileItem}>
+                      <Text style={styles.profileLabel}>Email:</Text>
+                      <Text style={styles.profileValue}>{userProfile.email}</Text>
+                    </View>
+                    <View style={styles.profileItem}>
+                      <Text style={styles.profileLabel}>Contato:</Text>
+                      <Text style={styles.profileValue}>{userProfile.contact}</Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={styles.emptyMessage}>Nenhum dado de perfil disponível</Text>
+                )}
+              </View>
+            )}
             
             <Text style={styles.subtitulo}>Empresas Vinculadas</Text>
             <View style={styles.quadrado}>
@@ -868,6 +1076,15 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
           </ScrollView>
         </Animated.View>
       </SafeAreaView>
+      <ProfileModal
+        visible={profileModalVisible}
+        onClose={() => setProfileModalVisible(false)}
+        onLogout={async () => {
+          await removeToken();
+          onLogout();
+          onNavigateToLogin();
+        }}
+      />
     </>
   );
 };
@@ -896,7 +1113,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     borderRadius: 15,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#1a73e8',
     elevation: 4,
     shadowColor: "#000",
@@ -904,6 +1121,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
     marginHorizontal: 2,
+    flexDirection: 'row',
+    paddingHorizontal: 20,
   },
   title: {
     fontSize: 28,
@@ -1076,6 +1295,57 @@ const styles = StyleSheet.create({
   backgroundModeText: {
     color: "#28a745",
     fontWeight: "500",
+  },
+  profileButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+  },
+  profileButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  profileSection: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: "#f0f0f0",
+  },
+  profileTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 16,
+    color: '#333',
+    textAlign: 'center',
+  },
+  profileData: {
+    width: '100%',
+  },
+  profileItem: {
+    flexDirection: 'row',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  profileLabel: {
+    width: '30%',
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#555',
+  },
+  profileValue: {
+    flex: 1,
+    fontSize: 15,
+    color: '#333',
   },
 });
 
