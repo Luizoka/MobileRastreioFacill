@@ -326,42 +326,77 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
   const sendCurrentLocation = async (latitude: string, longitude: string) => {
     const token = await getToken();
     if (!token) {
-      console.error("Token not found");
+      console.error("Token não encontrado");
       return;
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/funcionario/enviar-localizacao-atual`, {
+      // Decodificar o token para obter o ID do usuário
+      const tokenParts = token.split('.');
+      const payload = JSON.parse(atob(tokenParts[1]));
+      const userId = payload.id;
+
+      // Preparar o body com o formato correto
+      const requestBody = {
+        user_id: userId,
+        latitude: latitude,
+        longitude: longitude,
+        company_ids: [selectedEmpresaId] // Enviando para a empresa selecionada
+      };
+
+      const response = await fetch(`${API_BASE_URL}/api/location-histories`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ latitude, longitude, id_empresa: selectedEmpresaId }),
+        body: JSON.stringify(requestBody),
       });
 
-      if (response.status === 500) {
-        const data = await response.json();
-        if (data.error === "Erro ao buscar vínculo do funcionário.") {
-          console.error("Error: Erro ao buscar vínculo do funcionário.");
-        } else if (data.error === "Erro ao atualizar a localização atual.") {
-          console.error("Error: Erro ao atualizar a localização atual.");
-        } else {
-          console.error("Error: Erro desconhecido ao enviar localização.");
+      const responseText = await response.text();
+      let data;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        console.error("Erro ao analisar resposta JSON:", e);
+        return;
+      }
+
+      if (response.status === 201) {
+        console.log("Localização enviada com sucesso:", data);
+        
+        // Verificar se há erros mesmo com status 201
+        if (data.errors && data.errors.length > 0) {
+          console.warn("Localização enviada, mas com avisos:", data.errors);
+          // Aqui você poderia implementar alguma lógica para lidar com esses avisos,
+          // como mostrar um alerta ao usuário ou registrar os erros
         }
       } else if (response.status === 404) {
-        const data = await response.json();
-        if (data.error === "Nenhum vínculo ativo encontrado para a empresa especificada.") {
-          console.error("Error: Nenhum vínculo ativo encontrado para a empresa especificada.");
-        } else {
-          console.error("Error: Erro desconhecido ao enviar localização.");
-        }
+        console.error("Erro 404:", data.error);
+        // O usuário não foi encontrado
+        Alert.alert(
+          "Erro",
+          "Usuário não encontrado. Por favor, faça login novamente.",
+          [
+            {
+              text: "OK",
+              onPress: async () => {
+                await removeToken();
+                onLogout();
+                onNavigateToLogin();
+              },
+            },
+          ]
+        );
+      } else if (response.status === 500) {
+        console.error("Erro 500:", data.error);
+        // Poderia adicionar uma lógica para tentar novamente após um tempo
       } else {
-        const data = await response.json();
-        console.log("Current location response:", data);
+        console.error(`Erro não específico (${response.status}):`, data);
       }
     } catch (error) {
-      console.error("Error sending current location:", error);
+      console.error("Erro ao enviar localização:", error);
     }
   };
 
