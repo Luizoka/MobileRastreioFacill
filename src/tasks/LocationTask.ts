@@ -228,7 +228,13 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
         );
       }
     }
-  } catch (error) {
-    console.error('Erro ao processar localização em segundo plano:', error);
+  } catch (error: any) {
+    console.error('❌ Erro ao processar localização em segundo plano (detalhado):', {
+      message: error?.message,
+      name: error?.name,
+      stack: error?.stack,
+      toString: error?.toString(),
+      ...(error instanceof TypeError && { isTypeError: true })
+    });
   }
 });

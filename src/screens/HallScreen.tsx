@@ -275,9 +275,15 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
         console.log(`Erro não específico (${response.status}):`, data);
         setSolicitacoesError(data.message || "Erro ao buscar solicitações");
       }
-    } catch (error) {
-      console.error("Exceção ao buscar solicitações:", error);
-      setSolicitacoesError("Erro ao buscar solicitações. Verifique sua conexão.");
+    } catch (error: any) {
+      console.error("❌ Erro ao buscar empresas (detalhado):", {
+        message: error?.message,
+        name: error?.name,
+        stack: error?.stack,
+        toString: error?.toString(),
+        ...(error instanceof TypeError && { isTypeError: true })
+      });
+      setEmpresasError("Erro ao buscar empresas. Verifique a conexão com a internet ou a URL da API.");
     } finally {
       setSolicitacoesCarregadas(true);
     }

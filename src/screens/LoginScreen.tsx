@@ -129,9 +129,17 @@ const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, o
         console.error('Erro de login:', response.statusText);
         setError('Falha no login. Tente novamente.');
       }
-    } catch (err) {
-      console.error('Erro de login:', err);
-      setError('Falha no login. Verifique sua conexão com a internet.');
+    } catch (err: any) {
+     console.error('Erro de login (detalhado):', {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+      cause: err.cause,
+      toString: err.toString(),
+      ...(err instanceof TypeError && { isTypeError: true })
+    });
+    setError(`Erro de conexão: ${err.message || 'verifique a internet ou o endereço da API'}`);
+
     } finally {
       setLoading(false);
     }

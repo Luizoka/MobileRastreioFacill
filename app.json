@@ -34,7 +34,11 @@
         "ACCESS_NETWORK_STATE",
         "RECEIVE_BOOT_COMPLETED"
       ],
-      "package": "com.luizoka.RastreioTapajosComercio"
+      "package": "com.luizoka.RastreioTapajosComercio",
+      "foregroundService": {
+        "notificationTitle": "Rastreamento Ativo",
+        "notificationBody": "Estamos rastreando sua localização em segundo plano."
+      }
     },
     "web": {
       "favicon": "./assets/icons/favicon.png"
