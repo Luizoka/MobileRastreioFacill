@@ -33,6 +33,12 @@ export const startBackgroundUpdate = async () => {
       return false;
     }
 
+    const providerStatus = await Location.getProviderStatusAsync();
+    if (!providerStatus.gpsAvailable && !providerStatus.networkAvailable) {
+      console.warn("❌ Sem GPS ou rede disponível para localização.");
+      return false;
+    }
+
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
       accuracy: Location.Accuracy.Balanced,
       distanceInterval: 200,
@@ -176,30 +182,35 @@ export const sendLocationToApi = async (latitude: string | number, longitude: st
   }
 };
 
-// Definição da tarefa em segundo plano
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
+  console.log("🛰️ Task executada: background-location-task");
+
   if (error) {
-    console.error('Erro na tarefa de localização em segundo plano:', error);
+    console.error('❌ Erro na tarefa de localização em segundo plano:', error);
     return;
   }
   
   if (!data) {
-    console.error('Sem dados na tarefa de localização');
+    console.warn('⚠️ Sem dados na tarefa de localização');
     return;
   }
-  
+
+  console.log("📦 Dados recebidos da task:", JSON.stringify(data));
+
   const { locations } = data as { locations: Location.LocationObject[] };
-  const location = locations[0];
+  const location = locations?.[0];
   
   if (!location) {
-    console.error('Localização não disponível');
+    console.warn('⚠️ Localização não disponível');
     return;
   }
+
+  console.log("📍 Localização capturada:", location.coords);
 
   try {
     const token = await getToken();
     if (!token) {
-      console.error("Token não encontrado na tarefa em segundo plano");
+      console.error("❌ Token não encontrado na tarefa em segundo plano");
       return;
     }
 
@@ -207,7 +218,8 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
     const payload = JSON.parse(atob(tokenParts[1]));
     const userId = payload.id;
 
-    // Buscar empresas ativas para este usuário
+    console.log("👤 ID do usuário (background):", userId);
+
     const response = await fetch(`${API_BASE_URL}/api/user-role-companies/user/${userId}/role?role=employee`, {
       method: "GET",
       headers: {
@@ -215,18 +227,26 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       },
     });
 
+    console.log("📡 Status da resposta (empresas):", response.status);
+
     if (response.status === 200) {
       const empresas = await response.json();
+      console.log("🏢 Empresas retornadas:", empresas);
+
       if (empresas.length > 0) {
         const companyIds = empresas.map((empresa: any) => empresa.id);
-        
-        // Enviar localização para todas as empresas vinculadas
+        console.log("📤 Enviando localização para companyIds:", companyIds);
+
         await sendLocationToApi(
           location.coords.latitude.toString(),
           location.coords.longitude.toString(),
           companyIds
         );
+      } else {
+        console.warn("⚠️ Nenhuma empresa encontrada para o usuário");
       }
+    } else {
+      console.error("❌ Erro ao buscar empresas:", response.status);
     }
   } catch (error: any) {
     console.error('❌ Erro ao processar localização em segundo plano (detalhado):', {
