@@ -56,7 +56,8 @@
             "enableProguardInReleaseBuilds": false
           }
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "extra": {
       "eas": {
