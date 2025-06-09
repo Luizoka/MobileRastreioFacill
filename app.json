@@ -9,7 +9,7 @@
     "splash": {
       "image": "./assets/icons/aaa.jpg",
       "resizeMode": "contain",
-      "versionCode":8,
+      "versionCode": 8,
       "backgroundColor": "#ffffff"
     },
     "ios": {
@@ -34,11 +34,7 @@
         "ACCESS_NETWORK_STATE",
         "RECEIVE_BOOT_COMPLETED"
       ],
-      "package": "com.luizoka.RastreioTapajosComercio",
-      "foregroundService": {
-        "notificationTitle": "Rastreamento Ativo",
-        "notificationBody": "Estamos rastreando sua localização em segundo plano."
-      }
+      "package": "com.luizoka.RastreioTapajosComercio"
     },
     "web": {
       "favicon": "./assets/icons/favicon.png"
@@ -52,7 +48,15 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "enableProguardInReleaseBuilds": false
+          }
+        }
+      ]
     ],
     "extra": {
       "eas": {

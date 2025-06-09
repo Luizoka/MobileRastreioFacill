@@ -34,17 +34,23 @@ export const startBackgroundUpdate = async () => {
     }
 
     const providerStatus = await Location.getProviderStatusAsync();
-    if (!providerStatus.gpsAvailable && !providerStatus.networkAvailable) {
+    let accuracy;
+
+    if (providerStatus.gpsAvailable && providerStatus.gpsAvailable) {
+      accuracy = Location.Accuracy.Highest;
+    } else if (providerStatus.networkAvailable) {
+      accuracy = Location.Accuracy.High;
+    } else {
       console.warn("❌ Sem GPS ou rede disponível para localização.");
       return false;
     }
 
     await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-      accuracy: Location.Accuracy.Balanced,
-      distanceInterval: 200,
-      timeInterval: 180000,
-      deferredUpdatesInterval: 300000,
-      deferredUpdatesDistance: 500,
+      accuracy,
+      //distanceInterval: 200,
+      timeInterval: 60000,
+      //deferredUpdatesInterval: 300000,
+      //deferredUpdatesDistance: 500,
       showsBackgroundLocationIndicator: true,
       foregroundService: {
         notificationTitle: 'Rastreio Fácil',
@@ -54,7 +60,7 @@ export const startBackgroundUpdate = async () => {
       pausesUpdatesAutomatically: true,
       activityType: Location.ActivityType.AutomotiveNavigation,
     });
-    
+
     isBackgroundTrackingActive = true;
     return true;
   } catch (error) {
@@ -62,6 +68,7 @@ export const startBackgroundUpdate = async () => {
     return false;
   }
 };
+
 
 // Função para parar o rastreamento em segundo plano
 export const stopBackgroundUpdate = async () => {

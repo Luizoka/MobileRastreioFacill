@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import HallScreen from './src/screens/HallScreen';
+import './src/tasks/LocationTask';
 import { stopBackgroundUpdate } from './src/tasks/LocationTask'; // Atualizar o caminho da importação
 import { getToken, isTokenValid, removeToken } from './src/utils/auth';
 import { requestForegroundPermissionsAsync, requestBackgroundPermissionsAsync } from 'expo-location';
