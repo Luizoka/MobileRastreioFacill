@@ -35,12 +35,23 @@ export const inserirLocalizacao = async (
   if (!db) db = await SQLite.openDatabaseAsync('localizacoes.db');
   const companyIdsJson = JSON.stringify(companyIds);
 
-  await db.runAsync(
-    `INSERT INTO localizacoes (latitude, longitude, timestamp, company_ids, enviado)
-     VALUES (?, ?, ?, ?, 0);`,
-    [latitude, longitude, timestamp, companyIdsJson]
-  );
+  try {
+    await db.runAsync(
+      `INSERT INTO localizacoes (latitude, longitude, timestamp, company_ids, enviado)
+       VALUES (?, ?, ?, ?, 0);`,
+      [latitude, longitude, timestamp, companyIdsJson]
+    );
+    console.log('✅ Localização salva no SQLite:', {
+      latitude,
+      longitude,
+      timestamp,
+      companyIds
+    });
+  } catch (error) {
+    console.error('❌ Erro ao salvar localização no SQLite:', error);
+  }
 };
+
 
 export const buscarPendentes = async (): Promise<Localizacao[]> => {
   if (!db) db = await SQLite.openDatabaseAsync('localizacoes.db');

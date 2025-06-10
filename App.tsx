@@ -8,6 +8,10 @@ import './src/tasks/LocationTask';
 import { stopBackgroundUpdate } from './src/tasks/LocationTask'; // Atualizar o caminho da importação
 import { getToken, isTokenValid, removeToken } from './src/utils/auth';
 import { requestForegroundPermissionsAsync, requestBackgroundPermissionsAsync } from 'expo-location';
+import NetInfo from "@react-native-community/netinfo";
+import { buscarPendentes, marcarComoEnviado } from './src/db/db';
+import { sendLocationToApi } from './src/tasks/LocationTask';
+
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -25,6 +29,26 @@ const App = () => {
         setIsLoggedIn(false);
       }
     };
+
+  useEffect(() => {
+      const unsubscribe = NetInfo.addEventListener(async (state) => {
+        if (state.isConnected) {
+          const pendentes = await buscarPendentes();
+          for (const loc of pendentes) {
+            const result = await sendLocationToApi(
+              loc.latitude,
+              loc.longitude,
+              loc.company_ids
+            );
+            if (result.success && loc.id !== undefined) {
+              await marcarComoEnviado(loc.id);
+            }
+          }
+        }
+      });
+
+      return () => unsubscribe();
+  }, []);
 
     const requestLocationPermissions = async () => {
       try {
