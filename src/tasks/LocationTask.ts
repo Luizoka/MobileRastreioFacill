@@ -1,5 +1,7 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
+import NetInfo from "@react-native-community/netinfo";
+import { inserirLocalizacao } from '../db/db';
 import { getToken } from '../utils/auth';
 import { API_BASE_URL } from '@env';
 
@@ -92,6 +94,12 @@ export const sendLocationToApi = async (latitude: string | number, longitude: st
   const token = await getToken();
   if (!token) {
     console.error("❌ Token não encontrado");
+    await inserirLocalizacao(
+      typeof latitude === 'string' ? parseFloat(latitude) : latitude,
+      typeof longitude === 'string' ? parseFloat(longitude) : longitude,
+      new Date().toISOString(),
+    companyIds
+  );
     return { success: false, error: "Token não encontrado" };
   }
 
@@ -163,6 +171,8 @@ export const sendLocationToApi = async (latitude: string | number, longitude: st
 
       if (response.status === 201) {
         console.log("✅ Localização enviada com sucesso:", data);
+        // Salvar offline
+        await inserirLocalizacao(numLatitude, numLongitude, new Date().toISOString(), companyIds);
         
         // Verificar se há erros mesmo com status 201
         if (data.errors && data.errors.length > 0) {
@@ -180,6 +190,11 @@ export const sendLocationToApi = async (latitude: string | number, longitude: st
       return { success: false, error: "Erro ao decodificar token" };
     }
   } catch (error) {
+    // Converter latitude e longitude para números se forem strings
+    const numLatitude = typeof latitude === 'string' ? parseFloat(latitude) : latitude;
+    const numLongitude = typeof longitude === 'string' ? parseFloat(longitude) : longitude;
+
+    await inserirLocalizacao(numLatitude, numLongitude, new Date().toISOString(), companyIds);
     console.error("❌ Exceção ao enviar localização:", error);
     if (error instanceof Error) {
       console.error("❌ Detalhes do erro:", error.message);
