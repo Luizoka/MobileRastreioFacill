@@ -15,6 +15,7 @@ export const initDatabase = async (): Promise<void> => {
       enviado INTEGER DEFAULT 0
     );
   `);
+  console.log('🛠️ Banco de dados inicializado e tabela criada (se necessário).');
 };
 
 export interface Localizacao {
@@ -22,7 +23,7 @@ export interface Localizacao {
   latitude: number;
   longitude: number;
   timestamp: string;
-  company_ids: number[]; // armazenado como JSON
+  company_ids: number[];
   enviado: number;
 }
 
@@ -52,30 +53,39 @@ export const inserirLocalizacao = async (
   }
 };
 
-
 export const buscarPendentes = async (): Promise<Localizacao[]> => {
   if (!db) db = await SQLite.openDatabaseAsync('localizacoes.db');
 
-  const result = await db.getAllAsync<{
-    id: number;
-    latitude: number;
-    longitude: number;
-    timestamp: string;
-    company_ids: string;
-    enviado: number;
-  }>('SELECT * FROM localizacoes WHERE enviado = 0;');
+  try {
+    const result = await db.getAllAsync<{
+      id: number;
+      latitude: number;
+      longitude: number;
+      timestamp: string;
+      company_ids: string;
+      enviado: number;
+    }>('SELECT * FROM localizacoes WHERE enviado = 0;');
 
-  return result.map((row) => ({
-    ...row,
-    company_ids: JSON.parse(row.company_ids),
-  }));
+    const parsed = result.map((row) => ({
+      ...row,
+      company_ids: JSON.parse(row.company_ids),
+    }));
+
+    console.log(`📦 ${parsed.length} localizações pendentes encontradas no SQLite.`);
+    return parsed;
+  } catch (error) {
+    console.error('❌ Erro ao buscar localizações pendentes:', error);
+    return [];
+  }
 };
 
 export const marcarComoEnviado = async (id: number): Promise<void> => {
   if (!db) db = await SQLite.openDatabaseAsync('localizacoes.db');
 
-  await db.runAsync(
-    'UPDATE localizacoes SET enviado = 1 WHERE id = ?;',
-    [id]
-  );
+  try {
+    await db.runAsync('UPDATE localizacoes SET enviado = 1 WHERE id = ?;', [id]);
+    console.log(`✅ Localização marcada como enviada (ID: ${id})`);
+  } catch (error) {
+    console.error(`❌ Erro ao marcar localização como enviada (ID: ${id}):`, error);
+  }
 };
