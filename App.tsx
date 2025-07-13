@@ -6,7 +6,7 @@ import RegisterScreen from './src/screens/RegisterScreen';
 import HallScreen from './src/screens/HallScreen';
 import './src/tasks/LocationTask';
 import { stopBackgroundUpdate } from './src/tasks/LocationTask'; // Atualizar o caminho da importação
-import { getToken, isTokenValid, removeToken } from './src/utils/auth';
+import { getValidToken, clearAllAuthData } from './src/utils/auth';
 import { requestForegroundPermissionsAsync, requestBackgroundPermissionsAsync } from 'expo-location';
 
 const App = () => {
@@ -17,11 +17,18 @@ const App = () => {
 
   useEffect(() => {
     const checkLoginStatus = async () => {
-      const token = await getToken();
-      if (token && isTokenValid(token)) {
-        setIsLoggedIn(true);
-      } else {
-        await removeToken();
+      try {
+        // Usar a nova função que verifica e renova tokens automaticamente
+        const validToken = await getValidToken();
+        if (validToken) {
+          setIsLoggedIn(true);
+        } else {
+          await clearAllAuthData();
+          setIsLoggedIn(false);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar status de login:', error);
+        await clearAllAuthData();
         setIsLoggedIn(false);
       }
     };
@@ -57,7 +64,7 @@ const App = () => {
   }, [fontsLoaded]);
 
   const handleLogout = async () => {
-    await removeToken();
+    await clearAllAuthData();
     await stopBackgroundUpdate();
     setIsLoggedIn(false);
   };

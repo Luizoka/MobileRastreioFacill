@@ -1,6 +1,6 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
-import { getToken } from '../utils/auth';
+import { getValidToken } from '../utils/auth';
 import { API_BASE_URL } from '@env';
 
 export const LOCATION_TASK_NAME = 'background-location-task';
@@ -89,10 +89,10 @@ export const stopBackgroundUpdate = async () => {
 export const sendLocationToApi = async (latitude: string | number, longitude: string | number, companyIds: number[]) => {
   console.log("🚀 INÍCIO sendLocationToApi:", { latitude, longitude, companyIds });
   
-  const token = await getToken();
+  const token = await getValidToken();
   if (!token) {
-    console.error("❌ Token não encontrado");
-    return { success: false, error: "Token não encontrado" };
+    console.error("❌ Token não encontrado ou inválido");
+    return { success: false, error: "Token não encontrado ou inválido" };
   }
 
   try {
@@ -215,7 +215,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   console.log("📍 Localização capturada:", location.coords);
 
   try {
-    const token = await getToken();
+    const token = await getValidToken();
     if (!token) {
       console.error("❌ Token não encontrado na tarefa em segundo plano");
       return;

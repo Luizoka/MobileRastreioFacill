@@ -28,7 +28,7 @@ import {
   requestBackgroundPermissionsAsync,
   requestForegroundPermissionsAsync,
 } from "expo-location";
-import { removeToken, getToken } from "../utils/auth";
+import { removeToken, getValidToken } from "../utils/auth";
 import { API_BASE_URL } from "@env";
 import { 
   LOCATION_TASK_NAME, 
@@ -136,16 +136,13 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
   }, [empresas]);
 
   const fetchEmpresas = async () => {
-    const token = await getToken();
-    if (!token) {
-      setEmpresasError("Token não encontrado");
-      return;
-    }
-
     try {
-      const tokenParts = token.split('.');
-      const payload = JSON.parse(atob(tokenParts[1]));
-      const userId = payload.id;
+      setLoading(true);
+      const token = await getValidToken();
+      if (!token) {
+        console.error('Token não encontrado');
+        return;
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/user-role-companies/user/${userId}/role?role=employee`, {
         method: "GET",
@@ -155,44 +152,27 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
       });
 
       if (response.status === 200) {
-        setEmpresasError("");
-        const data = await response.json();
-        if (JSON.stringify(data) !== JSON.stringify(prevEmpresasRef.current)) {
-          setEmpresas(data);
-          prevEmpresasRef.current = data;
-        }
-      } else if (response.status === 400) {
-        setEmpresasError("Role inválida");
-      } else if (response.status === 500) {
-        setEmpresasError("Erro ao buscar empresas por usuário e role");
+        const empresas = await response.json();
+        setEmpresas(empresas);
+        console.log('Empresas carregadas:', empresas);
       } else {
-        const data = await response.json();
-        setEmpresasError(data.error || "Erro ao buscar empresas");
+        console.error('Erro ao carregar empresas:', response.status);
       }
     } catch (error) {
-      console.error("Erro ao buscar empresas:", error);
-      setEmpresasError("Erro ao buscar empresas");
+      console.error('Erro ao buscar empresas:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   const fetchSolicitacoes = async () => {
-    setSolicitacoesCarregadas(false);
-    
-    const token = await getToken();
-    if (!token) {
-      setSolicitacoesError("Token não encontrado");
-      setSolicitacoesCarregadas(true);
-      return;
-    }
-
     try {
-      setSolicitacoesError("");
-      
-      const tokenParts = token.split('.');
-      const payload = JSON.parse(atob(tokenParts[1]));
-      const userId = payload.id;
-
-      console.log("Buscando solicitações para o usuário:", userId);
+      setLoadingSolicitacoes(true);
+      const token = await getValidToken();
+      if (!token) {
+        console.error('Token não encontrado');
+        return;
+      }
 
       const response = await fetch(`${API_BASE_URL}/api/requests/recipient/${userId}?type=employee_request`, {
         method: "GET",
@@ -201,91 +181,45 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
         },
       });
 
-      const responseText = await response.text();
-      console.log("Resposta bruta:", responseText);
-      
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error("Erro ao parsear JSON:", e);
-        setSolicitacoesError("Erro ao processar resposta do servidor");
-        setSolicitacoesCarregadas(true);
-        return;
-      }
-
       if (response.status === 200) {
-        if (Array.isArray(data)) {
-          console.log("Solicitações encontradas:", data.length);
-          
-          if (data.length > 0) {
-            const solicitacoesComNome = await Promise.all(
-              data.map(async (solicitacao) => {
-                try {
-                  const empresaResponse = await fetch(
-                    `${API_BASE_URL}/api/companies/${solicitacao.company_id}`,
-                    {
-                      method: "GET",
-                      headers: {
-                        Authorization: `Bearer ${token}`,
-                      },
-                    }
-                  );
-                  
-                  if (empresaResponse.status === 200) {
-                    const empresaData = await empresaResponse.json();
-                    return { ...solicitacao, companyName: empresaData.name };
-                  } else {
-                    return { ...solicitacao, companyName: "Empresa desconhecida" };
-                  }
-                } catch (error) {
-                  console.error("Erro ao buscar empresa:", error);
-                  return { ...solicitacao, companyName: "Empresa desconhecida" };
-                }
-              })
-            );
-            
-            setSolicitacoes(solicitacoesComNome);
-          } else {
-            console.log("Array vazio de solicitações");
-            setSolicitacoes([]);
-          }
-        } else if (data && data.message && 
-                (data.message.includes("Nenhuma solicitação") || 
-                 data.message.includes("nenhuma solicitação"))) {
-          console.log("Mensagem do servidor:", data.message);
-          setSolicitacoes([]);
-        } else {
-          console.log("Resposta não esperada do tipo 200:", data);
-          setSolicitacoes([]);
-        }
+        const solicitacoes = await response.json();
         
-        setSolicitacoesError("");
-      } else if (response.status === 404 && data && data.message === "Nenhuma solicitação foi encontrada") {
-        console.log("404: Nenhuma solicitação encontrada");
-        setSolicitacoes([]);
-        setSolicitacoesError("");
-      } else if (response.status === 400 && data && data.message === "Tipo de solicitação inválido") {
-        console.log("400: Tipo de solicitação inválido");
-        setSolicitacoesError("Tipo de solicitação inválido");
-      } else if (response.status === 500 && data && data.message === "Erro ao buscar solicitações") {
-        console.log("500: Erro ao buscar solicitações");
-        setSolicitacoesError("Erro ao buscar solicitações");
+        // Buscar nomes das empresas para cada solicitação
+        const solicitacoesComEmpresa = await Promise.all(
+          solicitacoes.map(async (solicitacao: Solicitacao) => {
+            try {
+              const empresaResponse = await fetch(
+                `${API_BASE_URL}/api/companies/${solicitacao.company_id}`,
+                {
+                  method: "GET",
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
+              
+              if (empresaResponse.status === 200) {
+                const empresa = await empresaResponse.json();
+                return { ...solicitacao, companyName: empresa.name };
+              } else {
+                return { ...solicitacao, companyName: 'Empresa não encontrada' };
+              }
+            } catch (error) {
+              console.error('Erro ao buscar empresa:', error);
+              return { ...solicitacao, companyName: 'Erro ao buscar empresa' };
+            }
+          })
+        );
+        
+        setSolicitacoes(solicitacoesComEmpresa);
+        console.log('Solicitações carregadas:', solicitacoesComEmpresa);
       } else {
-        console.log(`Erro não específico (${response.status}):`, data);
-        setSolicitacoesError(data.message || "Erro ao buscar solicitações");
+        console.error('Erro ao carregar solicitações:', response.status);
       }
-    } catch (error: any) {
-      console.error("❌ Erro ao buscar empresas (detalhado):", {
-        message: error?.message,
-        name: error?.name,
-        stack: error?.stack,
-        toString: error?.toString(),
-        ...(error instanceof TypeError && { isTypeError: true })
-      });
-      setEmpresasError("Erro ao buscar empresas. Verifique a conexão com a internet ou a URL da API.");
+    } catch (error) {
+      console.error('Erro ao buscar solicitações:', error);
     } finally {
-      setSolicitacoesCarregadas(true);
+      setLoadingSolicitacoes(false);
     }
   };
 
@@ -313,52 +247,30 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
   }, [empresas]);
 
   const handleResponse = async (id: number, status: string) => {
-    const token = await getToken();
-    if (!token) {
-      setSolicitacoesError("Token não encontrado");
-      return;
-    }
-
     try {
+      const token = await getValidToken();
+      if (!token) {
+        console.error('Token não encontrado');
+        return;
+      }
+
       const response = await fetch(`${API_BASE_URL}/api/requests/respond/${id}`, {
-        method: "POST",
+        method: "PUT",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({ status }),
       });
 
       if (response.status === 200) {
-        const data = await response.json();
-        console.log("Solicitação respondida com sucesso:", data);
-        // Atualiza as listas após responder a solicitação
-        fetchSolicitacoes();
-        fetchEmpresas();
-        
-        // Exibe uma mensagem de sucesso ao usuário
-        Alert.alert(
-          "Sucesso", 
-          `Solicitação ${status === "accepted" ? "aceita" : "recusada"} com sucesso!`,
-          [{ text: "OK" }]
-        );
-      } else if (response.status === 404) {
-        const data = await response.json();
-        console.error("Erro 404:", data.error);
-        setSolicitacoesError(data.error || "Solicitação não encontrada ou tipo inválido");
-      } else if (response.status === 400) {
-        setSolicitacoesError("Erro de validação na resposta");
-      } else if (response.status === 500) {
-        setSolicitacoesError("Erro ao responder solicitação. Tente novamente.");
+        console.log(`Solicitação ${id} ${status} com sucesso`);
+        fetchSolicitacoes(); // Recarregar solicitações
       } else {
-        const data = await response.json();
-        setSolicitacoesError(
-          data.error || `Erro ao ${status === "accepted" ? "aceitar" : "recusar"} solicitação.`
-        );
+        console.error('Erro ao responder solicitação:', response.status);
       }
     } catch (error) {
-      console.error("Erro ao responder solicitação:", error);
-      setSolicitacoesError(`Erro ao ${status === "accepted" ? "aceitar" : "recusar"} solicitação. Verifique sua conexão.`);
+      console.error('Erro ao responder solicitação:', error);
     }
   };
 
@@ -904,49 +816,32 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
   }, []);
 
   const fetchUserProfile = async () => {
-    setProfileLoading(true);
-    setProfileError("");
-    
     try {
-      const token = await getToken();
+      const token = await getValidToken();
       if (!token) {
-        setProfileError("Token não encontrado");
-        setProfileLoading(false);
+        console.error('Token não encontrado');
         return;
       }
-      
-      // Decodificar o token para obter o ID do usuário
-      const tokenParts = token.split('.');
-      const payload = JSON.parse(atob(tokenParts[1]));
-      const userId = payload.id;
-      
+
       const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
         method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      
+
       if (response.status === 200) {
-        const data = await response.json();
+        const userData = await response.json();
         setUserProfile({
-          name: data.name,
-          email: data.email,
-          contact: data.contact
+          name: userData.name || '',
+          email: userData.email || '',
+          contact: userData.contact || '',
         });
-      } else if (response.status === 404) {
-        setProfileError("Usuário não encontrado");
-      } else if (response.status === 500) {
-        setProfileError("Erro ao buscar dados do usuário");
       } else {
-        const data = await response.json();
-        setProfileError(data.error || "Erro ao buscar perfil");
+        console.error('Erro ao carregar perfil do usuário:', response.status);
       }
     } catch (error) {
-      console.error("Erro ao buscar perfil:", error);
-      setProfileError("Erro ao buscar perfil");
-    } finally {
-      setProfileLoading(false);
+      console.error('Erro ao buscar perfil do usuário:', error);
     }
   };
 

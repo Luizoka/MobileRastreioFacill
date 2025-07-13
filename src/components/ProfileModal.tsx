@@ -12,7 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform
 } from 'react-native';
-import { getToken } from '../utils/auth';
+import { getValidToken } from '../utils/auth';
 import { API_BASE_URL } from '@env';
 
 interface ProfileModalProps {
@@ -57,48 +57,43 @@ const ProfileModal = ({ visible, onClose, onLogout }: ProfileModalProps) => {
   }, [profile]);
 
   const fetchUserProfile = async () => {
-    setLoading(true);
-    setError('');
-    
     try {
-      const token = await getToken();
+      setLoading(true);
+      setError('');
+      
+      const token = await getValidToken();
       if (!token) {
         setError('Token não encontrado');
-        setLoading(false);
         return;
       }
-      
+
       // Decodificar o token para obter o ID do usuário
       const tokenParts = token.split('.');
       const payload = JSON.parse(atob(tokenParts[1]));
       const userId = payload.id;
-      
+
       const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      
-      const data = await response.json();
-      
+
       if (response.status === 200) {
+        const userData = await response.json();
         setProfile({
-          id: userId,
-          name: data.name,
-          email: data.email,
-          contact: data.contact
+          id: userData.id,
+          name: userData.name || '',
+          email: userData.email || '',
+          contact: userData.contact || '',
         });
-      } else if (response.status === 404) {
-        setError('Usuário não encontrado');
-      } else if (response.status === 500) {
-        setError('Erro ao buscar dados do usuário');
+        resetForm();
       } else {
-        setError(data.error || 'Erro ao buscar perfil');
+        setError('Erro ao carregar perfil do usuário');
       }
     } catch (error) {
       console.error('Erro ao buscar perfil:', error);
-      setError('Erro ao buscar perfil');
+      setError('Erro ao carregar perfil do usuário');
     } finally {
       setLoading(false);
     }
@@ -106,12 +101,12 @@ const ProfileModal = ({ visible, onClose, onLogout }: ProfileModalProps) => {
 
   const handleSaveProfile = async () => {
     if (!profile) return;
-    
+
     setSaving(true);
     setError('');
     
     try {
-      const token = await getToken();
+      const token = await getValidToken();
       if (!token) {
         setError('Token não encontrado');
         setSaving(false);
@@ -162,35 +157,11 @@ const ProfileModal = ({ visible, onClose, onLogout }: ProfileModalProps) => {
 
   const handleDeleteAccount = () => {
     Alert.alert(
-      'Excluir Conta',
-      'ATENÇÃO: Ao excluir sua conta, você perderá permanentemente:\n\n• Todos os seus dados pessoais\n• Histórico de localizações enviadas\n• Vínculos com empresas\n• Todas as solicitações pendentes\n\nEsta ação é irreversível e não poderá ser desfeita.',
+      'Confirmar Exclusão',
+      'Tem certeza que deseja excluir sua conta? Esta ação não pode ser desfeita.',
       [
-        {
-          text: 'Cancelar',
-          style: 'cancel',
-        },
-        {
-          text: 'Excluir mesmo assim',
-          style: 'destructive',
-          onPress: () => {
-            // Adicionar uma segunda confirmação para garantir que o usuário tem certeza
-            Alert.alert(
-              'Confirmação Final',
-              'Tem absoluta certeza que deseja excluir permanentemente sua conta?',
-              [
-                {
-                  text: 'Não, manter minha conta',
-                  style: 'cancel',
-                },
-                {
-                  text: 'Sim, excluir permanentemente',
-                  style: 'destructive',
-                  onPress: confirmDeleteAccount,
-                },
-              ]
-            );
-          },
-        },
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Excluir', style: 'destructive', onPress: confirmDeleteAccount },
       ]
     );
   };
@@ -202,7 +173,7 @@ const ProfileModal = ({ visible, onClose, onLogout }: ProfileModalProps) => {
     setError('');
     
     try {
-      const token = await getToken();
+      const token = await getValidToken();
       if (!token) {
         setError('Token não encontrado');
         setLoading(false);
@@ -223,7 +194,10 @@ const ProfileModal = ({ visible, onClose, onLogout }: ProfileModalProps) => {
           [
             {
               text: 'OK',
-              onPress: onLogout, // Fazer logout após excluir a conta
+              onPress: () => {
+                onClose();
+                onLogout();
+              },
             },
           ]
         );
