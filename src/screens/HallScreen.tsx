@@ -186,6 +186,8 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
       const payload = JSON.parse(atob(tokenParts[1]));
       const userId = payload.id;
 
+      console.log('Buscando solicitações para userId:', userId);
+
       const response = await fetch(`${API_BASE_URL}/api/requests/recipient/${userId}?type=employee_request`, {
         method: "GET",
         headers: {
@@ -193,8 +195,18 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
         },
       });
 
+      console.log('Status da resposta de solicitações:', response.status);
+
       if (response.status === 200) {
         const solicitacoes = await response.json();
+        console.log('Solicitações recebidas:', solicitacoes);
+        
+        if (solicitacoes.length === 0) {
+          console.log('Nenhuma solicitação encontrada');
+          setSolicitacoes([]);
+          setSolicitacoesCarregadas(true);
+          return;
+        }
         
         // Buscar nomes das empresas para cada solicitação
         const solicitacoesComEmpresa = await Promise.all(
@@ -224,12 +236,21 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
         );
         
         setSolicitacoes(solicitacoesComEmpresa);
+        setSolicitacoesCarregadas(true);
         console.log('Solicitações carregadas:', solicitacoesComEmpresa);
+      } else if (response.status === 404) {
+        console.log('Nenhuma solicitação encontrada (404)');
+        setSolicitacoes([]);
+        setSolicitacoesCarregadas(true);
       } else {
         console.error('Erro ao carregar solicitações:', response.status);
+        setSolicitacoesError('Erro ao carregar solicitações');
+        setSolicitacoesCarregadas(true);
       }
     } catch (error) {
       console.error('Erro ao buscar solicitações:', error);
+      setSolicitacoesError('Erro ao buscar solicitações');
+      setSolicitacoesCarregadas(true);
     } finally {
       setLoadingSolicitacoes(false);
     }
@@ -237,23 +258,18 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
 
   useEffect(() => {
     fetchEmpresas();
+    fetchSolicitacoes(); // Carregar solicitações imediatamente
   }, []);
 
   useEffect(() => {
-    if (empresas.length > 0) {
-      fetchSolicitacoes();
-    } else {
-      setSolicitacoes([]);
-      setSolicitacoesError("");
-    }
+    // Sempre carregar solicitações, independente de ter empresas ou não
+    fetchSolicitacoes();
   }, [empresas]);
 
   useEffect(() => {
     const interval = setInterval(() => {
       fetchEmpresas();
-      if (empresas.length > 0) {
-        fetchSolicitacoes();
-      }
+      fetchSolicitacoes(); // Sempre buscar solicitações
     }, 60000); // 1 minuto
     return () => clearInterval(interval);
   }, [empresas]);
@@ -834,6 +850,11 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
         console.error('Token não encontrado');
         return;
       }
+
+      // Extrair userId do token
+      const tokenParts = token.split('.');
+      const payload = JSON.parse(atob(tokenParts[1]));
+      const userId = payload.id;
 
       const response = await fetch(`${API_BASE_URL}/api/users/${userId}`, {
         method: "GET",
