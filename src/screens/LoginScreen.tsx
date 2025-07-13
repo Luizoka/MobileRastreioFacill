@@ -189,7 +189,7 @@ const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, o
       
       console.log('Body da requisição MFA:', JSON.stringify(mfaBody, null, 2));
       
-      // Fazer verificação MFA com token temporário
+      // Fazer verificação MFA (rota pública)
       const response = await fetch(`${API_BASE_URL}/api/auth/verify-mfa`, {
         method: 'POST',
         headers: {

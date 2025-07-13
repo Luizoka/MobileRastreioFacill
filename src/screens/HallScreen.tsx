@@ -84,6 +84,8 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
   const [trackingStatus, setTrackingStatus] = useState<{ [key: number]: boolean }>({});
   const [selectedEmpresaId, setSelectedEmpresaId] = useState<number | null>(null);
   const [solicitacoesCarregadas, setSolicitacoesCarregadas] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadingSolicitacoes, setLoadingSolicitacoes] = useState(false);
   
   const [refreshing, setRefreshing] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -144,6 +146,11 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
         return;
       }
 
+      // Extrair userId do token
+      const tokenParts = token.split('.');
+      const payload = JSON.parse(atob(tokenParts[1]));
+      const userId = payload.id;
+
       const response = await fetch(`${API_BASE_URL}/api/user-role-companies/user/${userId}/role?role=employee`, {
         method: "GET",
         headers: {
@@ -173,6 +180,11 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
         console.error('Token não encontrado');
         return;
       }
+
+      // Extrair userId do token
+      const tokenParts = token.split('.');
+      const payload = JSON.parse(atob(tokenParts[1]));
+      const userId = payload.id;
 
       const response = await fetch(`${API_BASE_URL}/api/requests/recipient/${userId}?type=employee_request`, {
         method: "GET",
