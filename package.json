@@ -12,6 +12,7 @@
     "@expo/config-plugins": "~10.1.1",
     "@expo/prebuild-config": "~9.0.0",
     "@react-native-async-storage/async-storage": "2.1.2",
+    "@react-native-community/netinfo": "^11.4.1",
     "axios": "^1.7.7",
     "expo": "^53.0.0",
     "expo-app-loading": "^2.1.1",

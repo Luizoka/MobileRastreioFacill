@@ -1,13 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { initDb } from './src/utils/database';
 import { View, StyleSheet, Modal, Text, Button } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
 import LoginScreen from './src/screens/LoginScreen';
 import RegisterScreen from './src/screens/RegisterScreen';
 import HallScreen from './src/screens/HallScreen';
 import './src/tasks/LocationTask';
-import { stopBackgroundUpdate } from './src/tasks/LocationTask'; // Atualizar o caminho da importação
+import { stopBackgroundUpdate } from './src/tasks/LocationTask';
 import { getValidToken, clearAllAuthData } from './src/utils/auth';
 import { requestForegroundPermissionsAsync, requestBackgroundPermissionsAsync } from 'expo-location';
+import NetInfo from '@react-native-community/netinfo';
+import { syncPendingLocations } from './src/utils/sync';
 
 const App = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -15,46 +18,48 @@ const App = () => {
   const [fontsLoaded, setFontsLoaded] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(true);
 
+  // Inicialização do banco e listener de conectividade
   useEffect(() => {
-    const checkLoginStatus = async () => {
+    initDb();
+
+    const unsubscribeNetInfo = NetInfo.addEventListener(state => {
+      if (state.isConnected) {
+        syncPendingLocations();
+      }
+    });
+
+    return () => unsubscribeNetInfo();
+  }, []);
+
+  // Verifica login e solicita permissões
+  useEffect(() => {
+    const bootstrap = async () => {
       try {
-        // Usar a nova função que verifica e renova tokens automaticamente
         const validToken = await getValidToken();
-        if (validToken) {
-          setIsLoggedIn(true);
-        } else {
-          await clearAllAuthData();
-          setIsLoggedIn(false);
-        }
-      } catch (error) {
-        console.error('Erro ao verificar status de login:', error);
+        setIsLoggedIn(!!validToken);
+      } catch {
         await clearAllAuthData();
         setIsLoggedIn(false);
       }
-    };
 
-    const requestLocationPermissions = async () => {
       try {
-        const { status: foregroundStatus } = await requestForegroundPermissionsAsync();
-        if (foregroundStatus !== 'granted') {
+        const { status: fgStatus } = await requestForegroundPermissionsAsync();
+        if (fgStatus !== 'granted') {
           alert('Permissão para acessar localização foi negada');
           return;
         }
-
-        const { status: backgroundStatus } = await requestBackgroundPermissionsAsync();
-        if (backgroundStatus !== 'granted') {
+        const { status: bgStatus } = await requestBackgroundPermissionsAsync();
+        if (bgStatus !== 'granted') {
           alert('Permissão para acessar localização em segundo plano foi negada');
           return;
         }
-
         setIsModalVisible(false);
-      } catch (error) {
-        console.error('Erro ao solicitar permissões de localização:', error);
+      } catch (err) {
+        console.error('Erro ao solicitar permissões:', err);
       }
     };
 
-    checkLoginStatus();
-    requestLocationPermissions();
+    bootstrap();
   }, []);
 
   const onLayoutRootView = useCallback(async () => {
@@ -69,17 +74,15 @@ const App = () => {
     setIsLoggedIn(false);
   };
 
-  if (!fontsLoaded) {
-    return null;
-  }
+  if (!fontsLoaded) return null;
 
   return (
     <View style={styles.container} onLayout={onLayoutRootView}>
       <Modal
         animationType="slide"
-        transparent={true}
+        transparent
         visible={isModalVisible}
-        onRequestClose={() => setIsModalVisible(!isModalVisible)}
+        onRequestClose={() => setIsModalVisible(prev => !prev)}
       >
         <View style={styles.modalView}>
           <Text style={styles.modalText}>
@@ -88,13 +91,13 @@ const App = () => {
           <Button
             title="Conceder Permissão"
             onPress={async () => {
-              const { status: foregroundStatus } = await requestForegroundPermissionsAsync();
-              if (foregroundStatus !== 'granted') {
+              const { status: fgStatus } = await requestForegroundPermissionsAsync();
+              if (fgStatus !== 'granted') {
                 alert('Permissão para acessar a localização foi negada.');
                 return;
               }
-              const { status: backgroundStatus } = await requestBackgroundPermissionsAsync();
-              if (backgroundStatus !== 'granted') {
+              const { status: bgStatus } = await requestBackgroundPermissionsAsync();
+              if (bgStatus !== 'granted') {
                 alert('Permissão para acessar a localização em segundo plano foi negada.');
                 return;
               }
@@ -108,10 +111,7 @@ const App = () => {
         <HallScreen
           onLogout={handleLogout}
           onNavigateToLogin={() => setIsLoggedIn(false)}
-          onNavigateToMap={(id_empresa: number) => {
-            // Add your navigation logic here
-            console.log(`Navigating to map with id_empresa: ${id_empresa}`);
-          }}
+          onNavigateToMap={id_empresa => console.log(`Map: ${id_empresa}`)}
         />
       ) : isRegistering ? (
         <RegisterScreen
@@ -129,9 +129,7 @@ const App = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   modalView: {
     margin: 20,
     backgroundColor: 'white',
