@@ -826,8 +826,12 @@ const HallScreen = ({ onLogout, onNavigateToLogin, onNavigateToMap }: HallScreen
         // Obter as empresas que estavam sendo rastreadas antes
         const currentActiveCompanies = activeCompanies;
         
-        if (currentActiveCompanies.length > 0) {
-          console.log("Empresas ativas para rastreamento:", currentActiveCompanies);
+        if (
+          currentActiveCompanies.length > 0 //&&
+          //locationPermission &&
+          //currentActiveCompanies.some(id => trackingStatus[id])
+        ){ 
+          startForegroundLocationUpdates();
           
           // Se havia rastreamento ativo, reiniciar
           startForegroundLocationUpdates();

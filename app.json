@@ -4,10 +4,10 @@
     "slug": "RastreamentoVeicular",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icons/aaa.jpg",
+    "icon": "./assets/icons/aaa.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/icons/aaa.jpg",
+      "image": "./assets/icons/aaa.png",
       "resizeMode": "contain",
       "versionCode": 8,
       "backgroundColor": "#ffffff"
@@ -22,7 +22,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icons/aaa.jpg",
+        "foregroundImage": "./assets/icons/aaa.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [

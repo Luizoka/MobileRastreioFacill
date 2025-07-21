@@ -56,11 +56,11 @@ const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, o
       keyboardDidHideListener.remove();
     };
   }, []);
-
+  //TODO: Funcionamento do mfa  
   const getDeviceInfo = () => {
     return `${Device.brand || 'Unknown'} ${Device.modelName || 'Unknown'} - ${Platform.OS} ${Platform.Version}`;
   };
-
+  //TODO: funcionamento do mfa
   const handleLogin = async () => {
     if (!email || !senha) {
       setError('Por favor, preencha todos os campos');
@@ -75,7 +75,7 @@ const LoginScreen = ({ onLogin, onNavigateToRegister }: { onLogin: () => void, o
       // Obter token de dispositivo confiável se existir
       const trustedDeviceToken = await AsyncStorage.getItem('trustedDeviceToken');
       const deviceInfo = getDeviceInfo();
-
+      
       const requestBody: any = {
         email,
         password: senha,
