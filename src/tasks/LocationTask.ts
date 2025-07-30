@@ -7,21 +7,21 @@ import { insertLocation } from '../utils/database';
 export const LOCATION_TASK_NAME = 'background-location-task';
 export let isBackgroundTrackingActive = false;
 
-// Verifica se as permissões de localização em foreground e background estão disponíveis
 export const checkBackgroundLocationAvailable = async (): Promise<boolean> => {
   try {
-    const { status: fgStatus } = await Location.requestForegroundPermissionsAsync();
-    if (fgStatus !== 'granted') return false;
+    const { status: foregroundStatus } = await Location.requestForegroundPermissionsAsync();
+    if (foregroundStatus !== 'granted') {
+      return false;
+    }
 
-    const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-    return bgStatus === 'granted';
+    const { status: backgroundStatus } = await Location.requestBackgroundPermissionsAsync();
+    return backgroundStatus === 'granted';
   } catch (error) {
     console.error('Erro ao verificar permissões de localização:', error);
     return false;
   }
 };
 
-// Inicia o rastreamento em segundo plano
 export const startBackgroundUpdate = async (): Promise<boolean> => {
   try {
     const hasPermissions = await checkBackgroundLocationAvailable();
@@ -63,7 +63,6 @@ export const startBackgroundUpdate = async (): Promise<boolean> => {
   }
 };
 
-// Para o rastreamento em segundo plano
 export const stopBackgroundUpdate = async (): Promise<boolean> => {
   try {
     const registered = await TaskManager.isTaskRegisteredAsync(LOCATION_TASK_NAME);
@@ -79,27 +78,39 @@ export const stopBackgroundUpdate = async (): Promise<boolean> => {
   }
 };
 
-// Envia coordenadas para a API
 export const sendLocationToApi = async (
   latitude: number | string,
   longitude: number | string,
   companyIds: number[]
-): Promise<{ success: boolean; error?: string }> => {
+): Promise<{ success: boolean; error?: string; status?: number }> => {
   const token = await getValidToken();
-  if (!token) return { success: false, error: 'Token não encontrado' };
+  if (!token) {
+    console.error("❌ Token não encontrado");
+    return { success: false, error: 'Token não encontrado', status: 401 };
+  }
 
-  const [,, payloadBase64] = token.split('.');
-  const payloadJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
-  const { id: userId } = JSON.parse(payloadJson);
-
-  const body = {
-    user_id: userId,
-    latitude: typeof latitude === 'string' ? parseFloat(latitude) : latitude,
-    longitude: typeof longitude === 'string' ? parseFloat(longitude) : longitude,
-    company_ids: companyIds,
-  };
-
+  // Decodifica o token para extrair o user_id
   try {
+    const [, payloadBase64] = token.split('.');
+    const base64 = payloadBase64.replace(/-/g, '+').replace(/_/g, '/');
+    const payloadJson = atob(base64);
+    const payload = JSON.parse(payloadJson);
+    const userId = payload?.id;
+
+    if (!userId) {
+      console.error("❌ ID do usuário não encontrado no token");
+      return { success: false, error: 'ID do usuário não encontrado no token', status: 400 };
+    }
+
+    const body = {
+      user_id: userId,
+      latitude: typeof latitude === 'string' ? parseFloat(latitude) : latitude,
+      longitude: typeof longitude === 'string' ? parseFloat(longitude) : longitude,
+      company_ids: companyIds,
+    };
+
+    console.log("📤 Enviando localização para a API:", JSON.stringify(body));
+
     const res = await fetch(`${API_BASE_URL}/api/location-histories`, {
       method: 'POST',
       headers: {
@@ -109,16 +120,31 @@ export const sendLocationToApi = async (
       body: JSON.stringify(body),
     });
 
-    if (res.status === 201) return { success: true };
-    const data = await res.json();
-    return { success: false, error: data.error || 'Erro desconhecido' };
+    const text = await res.text();
+    console.log(`📡 Status da resposta: ${res.status}`);
+    console.log("📥 Resposta bruta da API:", text);
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (parseErr) {
+      console.error("❌ Erro ao fazer parse da resposta JSON:", parseErr);
+      return { success: false, error: text, status: res.status };
+    }
+
+    if (res.status === 201) {
+      console.log("✅ Localização enviada com sucesso");
+      return { success: true, status: res.status };
+    } else {
+      console.warn("⚠️ Localização não enviada:", data?.error || 'Erro desconhecido');
+      return { success: false, error: data?.error || 'Erro desconhecido', status: res.status };
+    }
   } catch (error: any) {
-    console.error('Erro no sendLocationToApi:', error);
-    return { success: false, error: error.message };
+    console.error("❌ Erro no sendLocationToApi:", error);
+    return { success: false, error: error.message, status: 500 };
   }
 };
 
-// Task em background: coleta, salva e tenta envio
 TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   console.log(`🛰️ Tarefa ${LOCATION_TASK_NAME} acionada`);
 
@@ -137,7 +163,6 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
   const timestamp = new Date().toISOString();
 
   try {
-    // Salva offline
     const token = await getValidToken();
     if (token) {
       const [, payloadB64] = token.split('.');
@@ -145,7 +170,6 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       await insertLocation(payload.id, latitude, longitude, timestamp);
     }
 
-    // Busca empresas
     if (token) {
       const userRes = await fetch(
         `${API_BASE_URL}/api/user-role-companies/user/${JSON.parse(atob(token.split('.')[1])).id}/role?role=employee`,
@@ -154,7 +178,6 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       if (userRes.ok) {
         const empresas = await userRes.json();
         const companyIds = empresas.map((e: any) => e.id);
-        // Envia online
         const result = await sendLocationToApi(latitude, longitude, companyIds);
         if (!result.success) console.warn('Envio falhou:', result.error);
       }

@@ -17,19 +17,27 @@ const App = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const [fontsLoaded, setFontsLoaded] = useState(true);
   const [isModalVisible, setIsModalVisible] = useState(true);
+  const [dbReady, setDbReady] = useState(false);
 
-  // Inicialização do banco e listener de conectividade
-  useEffect(() => {
-    initDb();
+useEffect(() => {
+  const setup = async () => {
+    console.log('🚀 Chamando initDb...');
+    await initDb();
+    console.log('✅ initDb finalizado com sucesso.');
+    setDbReady(true);
 
     const unsubscribeNetInfo = NetInfo.addEventListener(state => {
+      console.log("Olha o state: ", state.isConnected)
       if (state.isConnected) {
         syncPendingLocations();
       }
     });
 
     return () => unsubscribeNetInfo();
-  }, []);
+  };
+
+  setup();
+}, []);
 
   // Verifica login e solicita permissões
   useEffect(() => {
@@ -74,7 +82,7 @@ const App = () => {
     setIsLoggedIn(false);
   };
 
-  if (!fontsLoaded) return null;
+  if (!fontsLoaded || !dbReady) return null;
 
   return (
     <View style={styles.container} onLayout={onLayoutRootView}>
